@@ -1,0 +1,221 @@
+# Order Processing Workflow
+# Demonstrates sequential steps, conditional logic, parallel execution, error handling, and retries
+
+main:
+  params: [input]
+  steps:
+    - init:
+        assign:
+          - order: ${input.order}
+          - order_id: ${order.order_id}
+    
+    # Step 1: Validate Order
+    - validate_order:
+        try:
+          call: http.post
+          args:
+            url: ${input.validate_url}
+            body:
+              order: ${order}
+            timeout: 30
+          result: validation_result
+        retry:
+          max_retries: 2
+          backoff:
+            initial_delay: 1
+            max_delay: 10
+    
+    - log_validation:
+        call: sys.log
+        args:
+          text: ${"Validation result: " + string(validation_result.body.valid)}
+          severity: INFO
+    
+    # Step 2: Check if validation passed
+    - check_validation:
+        switch:
+          - condition: ${validation_result.body.valid == true}
+            next: check_inventory
+          - condition: true
+            next: return_validation_error
+    
+    # Step 3: Check Inventory
+    - check_inventory:
+        try:
+          call: http.post
+          args:
+            url: ${input.inventory_url}
+            body:
+              items: ${order.items}
+            timeout: 30
+          result: inventory_result
+        retry:
+          max_retries: 3
+          backoff:
+            initial_delay: 1
+            max_delay: 10
+    
+    - log_inventory:
+        call: sys.log
+        args:
+          text: ${"Inventory check: " + string(inventory_result.body.available)}
+          severity: INFO
+    
+    # Step 4: Check if items are available
+    - check_inventory_result:
+        switch:
+          - condition: ${inventory_result.body.available == true}
+            next: parallel_processing
+          - condition: true
+            next: return_inventory_error
+    
+    # Step 5: Parallel execution - call shipping and tax APIs simultaneously
+    - parallel_processing:
+        parallel:
+          shared: [order]
+          branches:
+            - branch1:
+                steps:
+                  - get_shipping_estimate:
+                      try:
+                        call: http.post
+                        args:
+                          url: ${input.shipping_url}
+                          body:
+                            address: ${order.shipping_address}
+                            items: ${order.items}
+                          timeout: 30
+                        result: shipping_result
+                      retry:
+                        max_retries: 2
+                        backoff:
+                          initial_delay: 1
+                          max_delay: 10
+                  - return_shipping:
+                      return: ${shipping_result.body}
+            
+            - branch2:
+                steps:
+                  - calculate_tax:
+                      try:
+                        call: http.post
+                        args:
+                          url: ${input.tax_url}
+                          body:
+                            total: ${order.total}
+                            state: ${order.shipping_address.state}
+                          timeout: 30
+                        result: tax_result
+                      retry:
+                        max_retries: 2
+                        backoff:
+                          initial_delay: 1
+                          max_delay: 10
+                  - return_tax:
+                      return: ${tax_result.body}
+        result: parallel_results
+    
+    - log_parallel_results:
+        call: sys.log
+        args:
+          text: ${"Shipping: " + string(parallel_results[0]) + ", Tax: " + string(parallel_results[1])}
+          severity: INFO
+    
+    - assign_parallel_results:
+        assign:
+          - shipping_estimate: ${parallel_results[0]}
+          - tax_calculation: ${parallel_results[1]}
+    
+    # Step 6: Process Payment (with error handling)
+    - process_payment:
+        try:
+          steps:
+            - call_payment_api:
+                call: http.post
+                args:
+                  url: ${input.payment_url}
+                  body:
+                    order_id: ${order_id}
+                    amount: ${order.total + tax_calculation.tax}
+                    customer_id: ${order.customer_id}
+                  timeout: 60
+                result: payment_result
+            - log_payment_success:
+                call: sys.log
+                args:
+                  text: ${"Payment processed: " + payment_result.body.transaction_id}
+                  severity: INFO
+        retry:
+          predicate: ${http.default_retry_predicate}
+          max_retries: 3
+          backoff:
+            initial_delay: 2
+            max_delay: 60
+            multiplier: 2
+        except:
+          as: e
+          steps:
+            - log_payment_error:
+                call: sys.log
+                args:
+                  text: ${"Payment failed: " + e.message}
+                  severity: ERROR
+            - return_payment_error:
+                return:
+                  status: "error"
+                  error: "payment_failed"
+                  message: ${e.message}
+                  order_id: ${order_id}
+    
+    # Step 7: Send Confirmation
+    - send_confirmation:
+        try:
+          call: http.post
+          args:
+            url: ${input.notification_url}
+            body:
+              order_id: ${order_id}
+              customer_id: ${order.customer_id}
+              shipping_estimate: ${shipping_estimate.days}
+              total: ${order.total + tax_calculation.tax}
+            timeout: 30
+          result: notification_result
+        retry:
+          max_retries: 2
+          backoff:
+            initial_delay: 1
+            max_delay: 10
+    
+    - log_confirmation:
+        call: sys.log
+        args:
+          text: ${"Confirmation sent to customer " + order.customer_id}
+          severity: INFO
+    
+    # Step 8: Return Success
+    - return_success:
+        return:
+          status: "success"
+          order_id: ${order_id}
+          validation: "passed"
+          inventory: "available"
+          shipping_estimate: ${shipping_estimate.days}
+          tax: ${tax_calculation.tax}
+          payment: ${payment_result.body.transaction_id}
+          confirmation_sent: true
+    
+    # Error returns
+    - return_validation_error:
+        return:
+          status: "error"
+          error: "validation_failed"
+          message: ${validation_result.body.message}
+          order_id: ${order_id}
+    
+    - return_inventory_error:
+        return:
+          status: "error"
+          error: "inventory_unavailable"
+          message: "One or more items are out of stock"
+          order_id: ${order_id}
+          unavailable_items: ${inventory_result.body.unavailable_items}
