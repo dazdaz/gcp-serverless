@@ -69,7 +69,7 @@ export REGION=us-central1
 Creates all necessary resources: Artifact Registry, KMS keys, attestors, and policy.
 
 ```bash
-./setup.sh
+./01-setup.sh
 ```
 
 **Creates:**
@@ -84,7 +84,7 @@ Creates all necessary resources: Artifact Registry, KMS keys, attestors, and pol
 Builds a container image, creates an attestation, and deploys to Cloud Run.
 
 ```bash
-./sign-and-deploy.sh
+./02-sign-and-deploy.sh
 ```
 
 **Steps:**
@@ -99,7 +99,7 @@ Builds a container image, creates an attestation, and deploys to Cloud Run.
 Demonstrates security by attempting to deploy an unsigned image.
 
 ```bash
-./test-unsigned.sh
+./03-test-unsigned.sh
 ```
 
 **Expected result:** Deployment is **blocked** by Binary Authorization
@@ -109,7 +109,7 @@ Demonstrates security by attempting to deploy an unsigned image.
 Removes all resources created by the demo.
 
 ```bash
-./cleanup.sh
+./99-cleanup.sh
 ```
 
 ## 📦 Components
@@ -124,10 +124,10 @@ Simple Flask web application that returns a success message when deployed.
 
 ### Scripts
 
-- **setup.sh** - Creates all Binary Authorization resources
-- **sign-and-deploy.sh** - Builds, signs, and deploys container
-- **test-unsigned.sh** - Tests blocking of unsigned images
-- **cleanup.sh** - Removes all resources
+- **01-setup.sh** - Creates all Binary Authorization resources
+- **02-sign-and-deploy.sh** - Builds, signs, and deploys container
+- **03-test-unsigned.sh** - Tests blocking of unsigned images
+- **99-cleanup.sh** - Removes all resources
 
 ## 🔐 How Binary Authorization Works
 
@@ -163,7 +163,7 @@ Before deploying to Cloud Run, Binary Authorization:
 
 ### Binary Authorization Policy
 
-The policy (`setup.sh` line 159) requires attestations:
+The policy (`01-setup.sh` line 159) requires attestations:
 
 ```yaml
 defaultAdmissionRule:
