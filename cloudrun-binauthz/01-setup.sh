@@ -16,17 +16,28 @@ POLICY_MODIFIED=false
 # Cleanup function
 cleanup_on_error() {
   local exit_code=$?
-  if [ $exit_code -ne 0 ]; then
+  
+  # Check if interrupted by user (Ctrl-C)
+  if [ $exit_code -eq 130 ]; then
     echo ""
     echo "=================================="
-    echo "Setup interrupted or failed!"
+    echo "Setup interrupted by user (Ctrl-C)"
     echo "Cleaning up partially created resources..."
     echo "=================================="
-    
-    # Reset Binary Authorization policy
-    if [ "$POLICY_MODIFIED" = true ]; then
-      echo "Resetting Binary Authorization policy to default..."
-      cat > /tmp/reset-policy.yaml << EOF
+  elif [ $exit_code -ne 0 ]; then
+    echo ""
+    echo "=================================="
+    echo "Setup failed with error!"
+    echo "Cleaning up partially created resources..."
+    echo "=================================="
+  else
+    return 0
+  fi
+  
+  # Reset Binary Authorization policy
+  if [ "$POLICY_MODIFIED" = true ]; then
+    echo "Resetting Binary Authorization policy to default..."
+    cat > /tmp/reset-policy.yaml << EOF
 admissionWhitelistPatterns:
 - namePattern: "*"
 defaultAdmissionRule:
@@ -34,29 +45,28 @@ defaultAdmissionRule:
   enforcementMode: ENFORCED_BLOCK_AND_AUDIT_LOG
 name: projects/${PROJECT_ID}/policy
 EOF
-      gcloud container binauthz policy import /tmp/reset-policy.yaml --quiet 2>/dev/null || true
-      rm -f /tmp/reset-policy.yaml
-    fi
-    
-    # Remove attestor
-    if [ ! -z "$CREATED_ATTESTOR" ]; then
-      echo "Removing attestor: $CREATED_ATTESTOR"
-      gcloud container binauthz attestors delete $CREATED_ATTESTOR --quiet 2>/dev/null || true
-    fi
-    
-    # Remove service account
-    if [ ! -z "$CREATED_SERVICE_ACCOUNT" ]; then
-      echo "Removing service account: $CREATED_SERVICE_ACCOUNT"
-      gcloud iam service-accounts delete $CREATED_SERVICE_ACCOUNT --quiet 2>/dev/null || true
-    fi
-    
-    # Note: KMS keys cannot be deleted immediately, only scheduled for deletion
-    # Note: Artifact Registry repositories are left for manual cleanup
-    
-    echo ""
-    echo "Cleanup complete. You can re-run setup.sh to try again."
-    echo "Note: KMS keys are scheduled for deletion (30-day waiting period)"
+    gcloud container binauthz policy import /tmp/reset-policy.yaml --quiet 2>/dev/null || true
+    rm -f /tmp/reset-policy.yaml
   fi
+  
+  # Remove attestor
+  if [ ! -z "$CREATED_ATTESTOR" ]; then
+    echo "Removing attestor: $CREATED_ATTESTOR"
+    gcloud container binauthz attestors delete $CREATED_ATTESTOR --quiet 2>/dev/null || true
+  fi
+  
+  # Remove service account
+  if [ ! -z "$CREATED_SERVICE_ACCOUNT" ]; then
+    echo "Removing service account: $CREATED_SERVICE_ACCOUNT"
+    gcloud iam service-accounts delete $CREATED_SERVICE_ACCOUNT --quiet 2>/dev/null || true
+  fi
+  
+  # Note: KMS keys cannot be deleted immediately, only scheduled for deletion
+  # Note: Artifact Registry repositories are left for manual cleanup
+  
+  echo ""
+  echo "Cleanup complete. You can re-run 01-setup.sh to try again."
+  echo "Note: KMS keys are scheduled for deletion (30-day waiting period)"
 }
 
 # Set up trap to catch errors and interrupts
