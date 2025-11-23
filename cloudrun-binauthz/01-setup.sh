@@ -143,6 +143,10 @@ else
     --quiet
   CREATED_SERVICE_ACCOUNT="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
   echo "✓ Service account created"
+  
+  # Wait for service account to propagate
+  echo "Waiting for service account to propagate..."
+  sleep 10
 fi
 echo ""
 
