@@ -77,43 +77,31 @@ main:
             - branch1:
                 steps:
                   - get_shipping_estimate:
-                      try:
-                        call: http.post
-                        args:
-                          url: ${input.shipping_url}
-                          body:
-                            address: ${order.shipping_address}
-                            items: ${order.items}
-                          timeout: 30
-                        result: shipping_result
-                      retry:
-                        max_retries: 2
-                        backoff:
-                          initial_delay: 1
-                          max_delay: 10
+                      call: http.post
+                      args:
+                        url: ${input.shipping_url}
+                        body:
+                          address: ${order.shipping_address}
+                          items: ${order.items}
+                        timeout: 30
+                      result: shipping_result
                   - return_shipping:
                       return: ${shipping_result.body}
             
             - branch2:
                 steps:
                   - calculate_tax:
-                      try:
-                        call: http.post
-                        args:
-                          url: ${input.tax_url}
-                          body:
-                            total: ${order.total}
-                            state: ${order.shipping_address.state}
-                          timeout: 30
-                        result: tax_result
-                      retry:
-                        max_retries: 2
-                        backoff:
-                          initial_delay: 1
-                          max_delay: 10
+                      call: http.post
+                      args:
+                        url: ${input.tax_url}
+                        body:
+                          total: ${order.total}
+                          state: ${order.shipping_address.state}
+                        timeout: 30
+                      result: tax_result
                   - return_tax:
                       return: ${tax_result.body}
-        result: parallel_results
+          result: parallel_results
     
     - log_parallel_results:
         call: sys.log
