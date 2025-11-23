@@ -166,8 +166,42 @@ gcloud projects add-iam-policy-binding ${PROJECT_ID} \
 echo "✓ IAM permissions configured"
 echo ""
 
+# Create Container Analysis note
+echo "6. Creating Container Analysis note..."
+NOTE_ID="${ATTESTOR_NAME}"
+NOTE_URI="projects/${PROJECT_ID}/notes/${NOTE_ID}"
+
+# Check if note exists
+if curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  "https://containeranalysis.googleapis.com/v1/${NOTE_URI}" | grep -q "name"; then
+  echo "Note already exists"
+else
+  # Create the note
+  cat > /tmp/note_payload.json << EOF
+{
+  "name": "${NOTE_URI}",
+  "attestation": {
+    "hint": {
+      "human_readable_name": "Attestor for Binary Authorization demo"
+    }
+  }
+}
+EOF
+
+  curl -X POST \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+    --data-binary @/tmp/note_payload.json \
+    "https://containeranalysis.googleapis.com/v1/projects/${PROJECT_ID}/notes/?noteId=${NOTE_ID}" \
+    > /dev/null 2>&1
+  
+  rm /tmp/note_payload.json
+  echo "✓ Container Analysis note created"
+fi
+echo ""
+
 # Create attestor
-echo "6. Creating Binary Authorization attestor..."
+echo "7. Creating Binary Authorization attestor..."
 if gcloud container binauthz attestors describe ${ATTESTOR_NAME} --quiet 2>/dev/null; then
   echo "Attestor already exists"
 else
@@ -180,7 +214,7 @@ else
   
   # Create the attestor
   gcloud container binauthz attestors create ${ATTESTOR_NAME} \
-    --attestation-authority-note=projects/${PROJECT_ID}/notes/${ATTESTOR_NAME} \
+    --attestation-authority-note=${NOTE_URI} \
     --attestation-authority-note-project=${PROJECT_ID} \
     --quiet
   
@@ -200,7 +234,7 @@ fi
 echo ""
 
 # Configure Binary Authorization policy
-echo "7. Configuring Binary Authorization policy..."
+echo "8. Configuring Binary Authorization policy..."
 
 # Create policy that requires attestation
 cat > /tmp/binauthz-policy.yaml << EOF
