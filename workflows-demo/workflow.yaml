@@ -101,18 +101,17 @@ main:
                       result: tax_result
                   - return_tax:
                       return: ${tax_result.body}
-          result: parallel_results
+    
+    - assign_parallel_results:
+        assign:
+          - shipping_estimate: ${parallel_processing[0]}
+          - tax_calculation: ${parallel_processing[1]}
     
     - log_parallel_results:
         call: sys.log
         args:
-          text: ${parallel_results}
+          text: ${parallel_processing}
           severity: INFO
-    
-    - assign_parallel_results:
-        assign:
-          - shipping_estimate: ${parallel_results[0]}
-          - tax_calculation: ${parallel_results[1]}
     
     # Step 6: Process Payment (with error handling)
     - process_payment:
