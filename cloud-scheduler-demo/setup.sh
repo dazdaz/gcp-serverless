@@ -5,6 +5,53 @@
 
 set -e
 
+# Track created resources for cleanup
+CREATED_SERVICE_ACCOUNT=""
+CREATED_FUNCTION=""
+CREATED_JOB=""
+
+# Cleanup function
+cleanup_on_error() {
+  local exit_code=$?
+  if [ $exit_code -ne 0 ]; then
+    echo ""
+    echo "=================================="
+    echo "Setup interrupted or failed!"
+    echo "Cleaning up partially created resources..."
+    echo "=================================="
+    
+    # Remove scheduler job if created
+    if [ ! -z "$CREATED_JOB" ]; then
+      echo "Removing Cloud Scheduler job: $CREATED_JOB"
+      gcloud scheduler jobs delete $CREATED_JOB \
+        --location=$REGION \
+        --quiet 2>/dev/null || true
+    fi
+    
+    # Remove Cloud Function if created
+    if [ ! -z "$CREATED_FUNCTION" ]; then
+      echo "Removing Cloud Function: $CREATED_FUNCTION"
+      gcloud functions delete $CREATED_FUNCTION \
+        --gen2 \
+        --region=$REGION \
+        --quiet 2>/dev/null || true
+    fi
+    
+    # Remove service account if created
+    if [ ! -z "$CREATED_SERVICE_ACCOUNT" ]; then
+      echo "Removing service account: $CREATED_SERVICE_ACCOUNT"
+      gcloud iam service-accounts delete $CREATED_SERVICE_ACCOUNT \
+        --quiet 2>/dev/null || true
+    fi
+    
+    echo ""
+    echo "Cleanup complete. You can re-run setup.sh to try again."
+  fi
+}
+
+# Set up trap to catch errors and interrupts
+trap cleanup_on_error EXIT INT TERM
+
 echo "=================================="
 echo "Cloud Scheduler Demo - Setup"
 echo "=================================="
@@ -40,6 +87,7 @@ else
   gcloud iam service-accounts create ${SERVICE_ACCOUNT_NAME} \
     --display-name="Cloud Scheduler Invoker" \
     --quiet
+  CREATED_SERVICE_ACCOUNT="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
   echo "✓ Service account created"
 fi
 echo ""
@@ -56,6 +104,7 @@ gcloud functions deploy ${FUNCTION_NAME} \
   --allow-unauthenticated \
   --quiet
 
+CREATED_FUNCTION="${FUNCTION_NAME}"
 echo "✓ Cloud Function deployed"
 echo ""
 
@@ -98,6 +147,7 @@ gcloud scheduler jobs create http ${JOB_NAME} \
   --min-backoff=5s \
   --quiet
 
+CREATED_JOB="${JOB_NAME}"
 echo "✓ Cloud Scheduler job created"
 echo ""
 

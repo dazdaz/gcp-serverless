@@ -5,6 +5,45 @@
 
 set -e
 
+# Track created resources for cleanup
+CREATED_FUNCTION=""
+CREATED_WORKFLOW=""
+
+# Cleanup function
+cleanup_on_error() {
+  local exit_code=$?
+  if [ $exit_code -ne 0 ]; then
+    echo ""
+    echo "=================================="
+    echo "Setup interrupted or failed!"
+    echo "Cleaning up partially created resources..."
+    echo "=================================="
+    
+    # Remove workflow if created
+    if [ ! -z "$CREATED_WORKFLOW" ]; then
+      echo "Removing workflow: $CREATED_WORKFLOW"
+      gcloud workflows delete $CREATED_WORKFLOW \
+        --location=$REGION \
+        --quiet 2>/dev/null || true
+    fi
+    
+    # Remove Cloud Function if created
+    if [ ! -z "$CREATED_FUNCTION" ]; then
+      echo "Removing Cloud Function: $CREATED_FUNCTION"
+      gcloud functions delete $CREATED_FUNCTION \
+        --gen2 \
+        --region=$REGION \
+        --quiet 2>/dev/null || true
+    fi
+    
+    echo ""
+    echo "Cleanup complete. You can re-run setup.sh to try again."
+  fi
+}
+
+# Set up trap to catch errors and interrupts
+trap cleanup_on_error EXIT INT TERM
+
 echo "=================================="
 echo "Workflows Demo - Setup"
 echo "=================================="
@@ -45,6 +84,7 @@ gcloud functions deploy ${FUNCTION_NAME} \
   --timeout=60s \
   --quiet
 
+CREATED_FUNCTION="${FUNCTION_NAME}"
 echo "✓ Mock API deployed"
 echo ""
 
@@ -83,6 +123,7 @@ gcloud workflows deploy ${WORKFLOW_NAME} \
   --location=${REGION} \
   --quiet
 
+CREATED_WORKFLOW="${WORKFLOW_NAME}"
 echo "✓ Workflow deployed"
 echo ""
 

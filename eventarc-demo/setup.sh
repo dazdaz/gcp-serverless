@@ -5,6 +5,51 @@
 
 set -e
 
+# Track created resources for cleanup
+CREATED_BUCKET=""
+CREATED_SERVICE=""
+CREATED_TRIGGER=""
+
+# Cleanup function
+cleanup_on_error() {
+  local exit_code=$?
+  if [ $exit_code -ne 0 ]; then
+    echo ""
+    echo "=================================="
+    echo "Setup interrupted or failed!"
+    echo "Cleaning up partially created resources..."
+    echo "=================================="
+    
+    # Remove trigger if created
+    if [ ! -z "$CREATED_TRIGGER" ]; then
+      echo "Removing Eventarc trigger: $CREATED_TRIGGER"
+      gcloud eventarc triggers delete $CREATED_TRIGGER \
+        --location=$REGION \
+        --quiet 2>/dev/null || true
+    fi
+    
+    # Remove Cloud Run service if created
+    if [ ! -z "$CREATED_SERVICE" ]; then
+      echo "Removing Cloud Run service: $CREATED_SERVICE"
+      gcloud run services delete $CREATED_SERVICE \
+        --region=$REGION \
+        --quiet 2>/dev/null || true
+    fi
+    
+    # Remove bucket if created
+    if [ ! -z "$CREATED_BUCKET" ]; then
+      echo "Removing Cloud Storage bucket: $CREATED_BUCKET"
+      gsutil rm -r $CREATED_BUCKET 2>/dev/null || true
+    fi
+    
+    echo ""
+    echo "Cleanup complete. You can re-run setup.sh to try again."
+  fi
+}
+
+# Set up trap to catch errors and interrupts
+trap cleanup_on_error EXIT INT TERM
+
 echo "=================================="
 echo "Eventarc Demo - Setup"
 echo "=================================="
@@ -40,6 +85,7 @@ echo ""
 # Create Cloud Storage bucket
 echo "2. Creating Cloud Storage bucket..."
 gsutil mb -l ${REGION} gs://${BUCKET_NAME}
+CREATED_BUCKET="gs://${BUCKET_NAME}"
 echo "✓ Bucket created: gs://${BUCKET_NAME}"
 echo ""
 
@@ -53,6 +99,7 @@ gcloud run deploy ${SERVICE_NAME} \
   --allow-unauthenticated \
   --quiet
 
+CREATED_SERVICE="${SERVICE_NAME}"
 echo "✓ Cloud Run service deployed"
 echo ""
 
@@ -89,6 +136,7 @@ gcloud eventarc triggers create ${TRIGGER_NAME} \
   --event-filters="bucket=${BUCKET_NAME}" \
   --service-account="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
+CREATED_TRIGGER="${TRIGGER_NAME}"
 echo "✓ Eventarc trigger created"
 echo ""
 

@@ -5,6 +5,45 @@
 
 set -e
 
+# Track created resources for cleanup
+CREATED_FUNCTION=""
+CREATED_QUEUE=""
+
+# Cleanup function
+cleanup_on_error() {
+  local exit_code=$?
+  if [ $exit_code -ne 0 ]; then
+    echo ""
+    echo "=================================="
+    echo "Setup interrupted or failed!"
+    echo "Cleaning up partially created resources..."
+    echo "=================================="
+    
+    # Remove task queue if created
+    if [ ! -z "$CREATED_QUEUE" ]; then
+      echo "Removing Cloud Tasks queue: $CREATED_QUEUE"
+      gcloud tasks queues delete $CREATED_QUEUE \
+        --location=$REGION \
+        --quiet 2>/dev/null || true
+    fi
+    
+    # Remove Cloud Function if created
+    if [ ! -z "$CREATED_FUNCTION" ]; then
+      echo "Removing Cloud Function: $CREATED_FUNCTION"
+      gcloud functions delete $CREATED_FUNCTION \
+        --gen2 \
+        --region=$REGION \
+        --quiet 2>/dev/null || true
+    fi
+    
+    echo ""
+    echo "Cleanup complete. You can re-run setup.sh to try again."
+  fi
+}
+
+# Set up trap to catch errors and interrupts
+trap cleanup_on_error EXIT INT TERM
+
 echo "=================================="
 echo "Cloud Tasks Demo - Setup"
 echo "=================================="
@@ -44,6 +83,7 @@ gcloud functions deploy ${FUNCTION_NAME} \
   --timeout=60s \
   --quiet
 
+CREATED_FUNCTION="${FUNCTION_NAME}"
 echo "✓ Worker function deployed"
 echo ""
 
@@ -73,6 +113,7 @@ gcloud tasks queues create ${QUEUE_NAME} \
   --max-retry-duration=86400s \
   --quiet
 
+CREATED_QUEUE="${QUEUE_NAME}"
 echo "✓ Cloud Tasks queue created"
 echo ""
 
