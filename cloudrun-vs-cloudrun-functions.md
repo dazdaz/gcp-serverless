@@ -70,3 +70,11 @@ It is crucial to understand that **Cloud Run functions** are effectively a devel
 
 > **The Golden Rule:**
 > If you can write your logic in a single file and don't want to deal with Docker, choose **Cloud Run functions**. If you need to install custom libraries, manage complex routing, or want full control over the OS, choose **Cloud Run**.
+
+---
+
+## Furthe reading
+
+* https://cloud.google.com/run/docs/functions/overview
+* https://cloud.google.com/run/docs/functions/comparison
+* https://cloud.google.com/functions/docs/concepts/overview
