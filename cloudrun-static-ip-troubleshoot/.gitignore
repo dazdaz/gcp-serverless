@@ -1,0 +1,15 @@
+# Environment variables
+.env
+*.env
+
+# GCP credentials
+*.json.key
+service-account-key.json
+credentials.json
+
+# Temporary files
+*.tmp
+*.log
+
+# OS files
+.DS_Store
