@@ -16,19 +16,32 @@ run() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/01-setup-environment.sh"
 
-echo "Reserving static IP address: $STATIC_IP_NAME"
+echo "Checking if static IP address already exists: $STATIC_IP_NAME"
 
-# Reserve a static external IP address
-run gcloud compute addresses create $STATIC_IP_NAME \
+# Check if static IP already exists
+EXISTING_IP=$(gcloud compute addresses describe $STATIC_IP_NAME \
   --region=$REGION \
-  --description="Static IP for Cloud Run NAT"
+  --format="value(address)" 2>/dev/null || echo "")
 
-# Get the IP address
-STATIC_IP=$(gcloud compute addresses describe $STATIC_IP_NAME \
-  --region=$REGION \
-  --format="value(address)")
-
-echo "Reserved static IP: $STATIC_IP"
+if [ -n "$EXISTING_IP" ]; then
+  echo "Static IP already exists: $EXISTING_IP"
+  echo "Reusing existing static IP address."
+  STATIC_IP=$EXISTING_IP
+else
+  echo "Reserving new static IP address: $STATIC_IP_NAME"
+  
+  # Reserve a static external IP address
+  run gcloud compute addresses create $STATIC_IP_NAME \
+    --region=$REGION \
+    --description="Static IP for Cloud Run NAT"
+  
+  # Get the IP address
+  STATIC_IP=$(gcloud compute addresses describe $STATIC_IP_NAME \
+    --region=$REGION \
+    --format="value(address)")
+  
+  echo "Reserved static IP: $STATIC_IP"
+fi
 
 echo ""
 echo "Creating Cloud Router: $ROUTER_NAME"

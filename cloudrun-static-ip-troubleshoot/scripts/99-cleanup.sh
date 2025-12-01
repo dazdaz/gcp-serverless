@@ -51,9 +51,21 @@ run gcloud compute networks vpc-access connectors delete $CONNECTOR_NAME \
   --region=$REGION --quiet 2>/dev/null || true
 
 echo ""
-echo "Releasing static IP..."
-run gcloud compute addresses delete $STATIC_IP_NAME \
-  --region=$REGION --quiet 2>/dev/null || true
+echo "Do you want to release the static IP address? (y/yes to release, n/no to keep)"
+echo "Note: Keeping the IP allows you to reuse it in future deployments."
+read -r RELEASE_IP
+
+if [[ "$RELEASE_IP" =~ ^[yY]([eE][sS])?$ ]]; then
+  echo "Releasing static IP..."
+  run gcloud compute addresses delete $STATIC_IP_NAME \
+    --region=$REGION --quiet 2>/dev/null || true
+else
+  STATIC_IP=$(gcloud compute addresses describe $STATIC_IP_NAME \
+    --region=$REGION \
+    --format="value(address)" 2>/dev/null || echo "")
+  echo "Keeping static IP: $STATIC_IP_NAME ($STATIC_IP)"
+  echo "You can reuse this IP in future deployments."
+fi
 
 echo ""
 echo "Deleting subnets (waiting for VPC connector resources to release)..."
