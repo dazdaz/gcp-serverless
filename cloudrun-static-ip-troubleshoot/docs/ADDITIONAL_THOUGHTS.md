@@ -25,12 +25,6 @@ Instead of relying on Cloud NAT, consider:
 - Route Cloud Run traffic through the proxy
 - More control but more complexity
 
-#### Option C: Cloud Run on GKE
-If you have complex networking requirements:
-- Deploy on GKE Autopilot
-- Full control over networking
-- Native Kubernetes networking features
-
 ---
 
 ### 2. Cost Considerations
