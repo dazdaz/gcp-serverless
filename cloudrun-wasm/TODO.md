@@ -250,4 +250,4 @@ curl -H "Cookie: beta-tester=true" \
      http://localhost:10001/api/version
 
 # Stop environment
-make docker-down
+scripts/99clean.sh
