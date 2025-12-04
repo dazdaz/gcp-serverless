@@ -28,12 +28,12 @@ Both demos use **GCP Service Extensions** to run Wasm plugins inside the Load Ba
 │  │                  Service Extensions (Wasm Sandbox)                 │  │
 │  │                                                                    │  │
 │  │   REQUEST PATH:   Demo 2 - Smart Router                           │  │
-│  │                   • Inspect headers/cookies          │  │
-│  │                   • Route to v1 or v2 backend        │  │
+│  │                   • Inspect headers/cookies                      │  │
+│  │                   • Route to v1 or v2 backend                    │  │
 │  │                                                                    │  │
 │  │   RESPONSE PATH:  Demo 1 - PII Scrubbing                          │  │
-│  │                   • Scan response body               │  │
-│  │                   • Redact credit cards, SSN, emails │  │
+│  │                   • Scan response body                           │  │
+│  │                   • Redact credit cards, SSN, emails             │  │
 │  └────────────────────────────────────────────────────────────────────┘  │
 │                                     │                                    │
 └─────────────────────────────────────┼────────────────────────────────────┘
