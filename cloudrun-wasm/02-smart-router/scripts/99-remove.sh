@@ -122,16 +122,16 @@ delete_artifact_images() {
 # Delete Wasm files from GCS
 delete_wasm_from_gcs() {
     local project_id=$1
-    
+
     local bucket="${project_id}-wasm-plugins"
-    
+
     print_info "Deleting Wasm files from GCS bucket: ${bucket}..."
-    
+
     if gsutil ls "gs://${bucket}" &> /dev/null 2>&1; then
         # Delete smart_router.wasm
         run_cmd gsutil rm "gs://${bucket}/wasm/smart_router.wasm" 2>/dev/null || true
         print_status "Deleted Wasm file: gs://${bucket}/wasm/smart_router.wasm"
-        
+
         # Check if bucket is empty, offer to delete it
         REMAINING=$(gsutil ls "gs://${bucket}" 2>/dev/null | wc -l || echo "0")
         if [ "$REMAINING" -eq 0 ]; then
@@ -144,6 +144,27 @@ delete_wasm_from_gcs() {
         fi
     else
         print_info "GCS bucket not found: ${bucket}"
+    fi
+}
+
+# Delete Artifact Registry repository
+delete_artifact_repository() {
+    local project_id=$1
+    local region=$2
+    local repo_name=$3
+
+    print_info "Deleting Artifact Registry repository: ${repo_name}..."
+
+    if gcloud artifacts repositories describe "${repo_name}" \
+        --location="${region}" \
+        --project="${project_id}" &> /dev/null 2>&1; then
+        run_cmd gcloud artifacts repositories delete "${repo_name}" \
+            --location="${region}" \
+            --project="${project_id}" \
+            --quiet
+        print_status "Deleted Artifact Registry repository: ${repo_name}"
+    else
+        print_info "Artifact Registry repository not found: ${repo_name}"
     fi
 }
 
@@ -305,22 +326,18 @@ cleanup_all() {
     delete_load_balancer "$project_id" "$region"
     delete_cloud_run_service "$project_id" "$region" "$service_name"
     delete_artifact_images "$project_id" "$region" "$artifact_repo"
+    delete_artifact_repository "$project_id" "$region" "$artifact_repo"
     delete_wasm_from_gcs "$project_id"
     
     print_header "Cleanup Complete"
-    
+
     echo "The following resources have been deleted:"
     echo "  - Cloud Run service: ${service_name}"
     echo "  - Load Balancer infrastructure (forwarding rule, proxy, backend, NEG, IP)"
     echo "  - Container images from GCR and Artifact Registry"
+    echo "  - Artifact Registry repository: ${artifact_repo}"
     echo "  - Wasm files: gs://${project_id}-wasm-plugins/wasm/smart_router.wasm"
     echo "  - Service Extensions (smart-router plugin, smart-router-extension)"
-    echo ""
-    echo "Note: Artifact Registry repository '${artifact_repo}' was not deleted"
-    echo "      (may contain images for other demos)"
-    echo ""
-    echo "To delete the Artifact Registry repo:"
-    echo "  gcloud artifacts repositories delete ${artifact_repo} --location=${region}"
 }
 
 # Parse arguments

@@ -220,7 +220,7 @@ upload_wasm() {
     fi
     
     # Upload Demo 2 Wasm
-    WASM_FILE="$DEMO_DIR/smart_router.wasm"
+    WASM_FILE="$DEMO_DIR/target/wasm32-unknown-unknown/release/smart_router.wasm"
     if [ -f "$WASM_FILE" ]; then
         print_info "Uploading Wasm file..."
         run_cmd gsutil cp "$WASM_FILE" "gs://${bucket}/wasm/smart_router.wasm"
@@ -228,12 +228,12 @@ upload_wasm() {
     else
         print_error "Wasm file not found at $WASM_FILE"
         print_info "Building Wasm locally..."
-        if command -v tinygo &> /dev/null; then
-            (cd "$DEMO_DIR" && tinygo build -o smart_router.wasm -scheduler=none -target=wasi ./main.go)
+        if command -v cargo &> /dev/null; then
+            (cd "$DEMO_DIR" && RUSTFLAGS="-C link-arg=-zstack-size=32768 -C panic=abort -C debuginfo=0" cargo build --target wasm32-unknown-unknown --release)
             run_cmd gsutil cp "$WASM_FILE" "gs://${bucket}/wasm/smart_router.wasm"
             print_status "Built and uploaded smart_router.wasm"
         else
-            print_error "TinyGo not found. Install TinyGo or build via make build-wasm first."
+            print_error "Cargo not found. Install Rust or build via make build-wasm first."
             return 1
         fi
     fi

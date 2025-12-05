@@ -11,42 +11,29 @@ substitutions:
   _TAG: latest
 
 steps:
-  # Step 1: Build Go Wasm plugin with TinyGo
-  # Use docker run with --user root since tinygo container runs as non-root by default
-  - name: 'gcr.io/cloud-builders/docker'
+  # Step 1: Build Rust Wasm plugin
+  - name: 'rust:latest'
     id: 'build-wasm'
-    args:
-      - 'run'
-      - '--rm'
-      - '-v'
-      - '/workspace:/workspace'
-      - '-w'
-      - '/workspace/cloudrun-wasm/02-smart-router'
-      - '-e'
-      - 'HOME=/tmp'
-      - '-e'
-      - 'GOCACHE=/tmp/go-build'
-      - '-e'
-      - 'GOPATH=/tmp/go'
-      - '--user'
-      - 'root'
-      - 'tinygo/tinygo:latest'
-      - 'bash'
-      - '-c'
-      - 'go mod download && tinygo build -o smart_router.wasm -scheduler=none -target=wasm -panic=trap -no-debug ./main.go && ls -lh smart_router.wasm'
-
-  # Step 2: Run Go tests (standard Go, not TinyGo)
-  # Only test ./router package - main package requires TinyGo/WASI
-  - name: 'golang:1.21'
-    id: 'test-wasm'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
+        rustup target add wasm32-wasip1
         cd cloudrun-wasm/02-smart-router
-        go mod download
-        go test -v ./router/...
-    waitFor: ['-']  # Run in parallel with build
+        # Check if Cargo.toml exists
+        if [ ! -f Cargo.toml ]; then
+          echo "Error: Cargo.toml not found in $(pwd)"
+          ls -la
+          exit 1
+        fi
+        
+        # Build
+        cargo build --target wasm32-wasip1 --release
+        
+        # Verify output
+        ls -lh target/wasm32-wasip1/release/smart_router.wasm
+
+
 
   # Step 3: Build backend Docker image
   - name: 'gcr.io/cloud-builders/docker'
@@ -80,9 +67,9 @@ steps:
         # Create bucket if it doesn't exist
         gsutil ls gs://$$BUCKET 2>/dev/null || gsutil mb -l ${_REGION} gs://$$BUCKET
         # Upload wasm file
-        gsutil cp cloudrun-wasm/02-smart-router/smart_router.wasm \
+        gsutil cp cloudrun-wasm/02-smart-router/target/wasm32-wasip1/release/smart_router.wasm \
           gs://$$BUCKET/demo2/smart_router.wasm
-        gsutil cp cloudrun-wasm/02-smart-router/smart_router.wasm \
+        gsutil cp cloudrun-wasm/02-smart-router/target/wasm32-wasip1/release/smart_router.wasm \
           gs://$$BUCKET/demo2/smart_router-${_TAG}.wasm
         echo "Uploaded to: gs://$$BUCKET/demo2/smart_router.wasm"
     waitFor: ['build-wasm']
@@ -102,7 +89,7 @@ steps:
         DOCKERFILE
         
         # Copy the wasm file to tmp
-        cp cloudrun-wasm/02-smart-router/smart_router.wasm /tmp/
+        cp cloudrun-wasm/02-smart-router/target/wasm32-wasip1/release/smart_router.wasm /tmp/
         
         # Build the OCI image
         cd /tmp
@@ -126,7 +113,7 @@ artifacts:
   objects:
     location: 'gs://${PROJECT_ID}-wasm-plugins/demo2/builds/$BUILD_ID/'
     paths:
-      - 'cloudrun-wasm/02-smart-router/smart_router.wasm'
+      - 'cloudrun-wasm/02-smart-router/target/wasm32-wasip1/release/smart_router.wasm'
 
 # Images to push (already handled in steps, but good for logging)
 images:

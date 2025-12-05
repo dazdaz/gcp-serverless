@@ -24,15 +24,15 @@ make test-live  # Verify routing works
 |--------|-------------|
 | `make all` | Build, test, and deploy (default) |
 | `make full` | Complete workflow: build, test, deploy, test-live |
-| `make build` | Build Wasm plugin (TinyGo) and container (Cloud Build) |
+| `make build` | Build Wasm plugin (Rust) and container (Cloud Build) |
 | `make build-wasm` | Build only the Wasm plugin |
 | `make build-container` | Build only the container image |
-| `make test` | Run Go unit tests |
+| `make test` | Run Rust unit tests |
 | `make test-cover` | Run tests with coverage |
 | `make deploy` | Deploy to Cloud Run |
 | `make test-live` | Test deployed service with authentication |
 | `make destroy` | Clean up all GCP resources |
-| `make lint` | Run golangci-lint |
+| `make lint` | Run clippy linter |
 | `make fmt` | Format code |
 | `make clean` | Clean build artifacts |
 
@@ -89,64 +89,52 @@ All conditions must match:
 
 ## Prerequisites
 
-- Go 1.21+
-- TinyGo 0.39+: [tinygo.org/getting-started](https://tinygo.org/getting-started/)
-  - macOS: `brew tap tinygo-org/tools && brew install tinygo`
+- Rust 1.70+ with wasm32-unknown-unknown target: [rustup.rs](https://rustup.rs/)
+  - Install: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+  - Add target: `rustup target add wasm32-unknown-unknown`
 - GCP project with billing enabled (for deployment)
 
 ## Building
 
 ```bash
-# Build with TinyGo
-tinygo build -o smart_router.wasm -scheduler=none -target=wasm -panic=trap -no-debug ./main.go
+# Build with Cargo
+cargo build --target wasm32-unknown-unknown --release
 
 # Or use make
-make build
+make build-wasm
 ```
 
-Output: `smart_router.wasm`
+Output: `target/wasm32-unknown-unknown/release/smart_router.wasm`
 
 ### ⚠️ GCP Service Extensions Sandbox Requirements
 
-**CRITICAL**: GCP Service Extensions has strict WASM runtime restrictions. You **MUST** use these TinyGo flags:
+**CRITICAL**: GCP Service Extensions has strict WASM runtime restrictions. WASM must be built for the wasm32-unknown-unknown target without syscalls that are blocked in the sandbox.
 
 ```bash
 # ✅ CORRECT for GCP Service Extensions
-tinygo build -o smart_router.wasm -scheduler=none -target=wasm -panic=trap -no-debug ./main.go
+cargo build --target wasm32-unknown-unknown --release
 
-# ❌ WRONG - Missing critical flags
-tinygo build -o smart_router.wasm -target=wasi ./main.go
+# ❌ WRONG - WASI target (includes unwanted imports)
+cargo build --target wasm32-wasi --release
 ```
-
-**Required Flags Explained:**
-
-| Flag | Purpose | Without It |
-|------|---------|------------|
-| `-target=wasm` | Pure WebAssembly (NOT wasi) | ❌ `restricted_callback` error (WASI syscalls blocked) |
-| `-scheduler=none` | Disable goroutine scheduler | ❌ proxy-wasm ABI incompatibility |
-| `-panic=trap` | Trap on panic instead of Go runtime | ❌ `missing import: gojs.runtime.ticks` error |
-| `-no-debug` | Reduce binary size | ⚠️ Larger binary, may hit size limits |
 
 **Common Errors and Solutions:**
 
-1. **`Function: _start failed: Uncaught Error: restricted_callback`**
-   - **Cause**: Using `-target=wasi` which includes WASI syscalls
-   - **Fix**: Use `-target=wasm` instead
-
-2. **`Failed to load Wasm module due to a missing import: gojs.runtime.ticks`**
-   - **Cause**: Go panic handler requires JavaScript runtime imports
-   - **Fix**: Add `-panic=trap` to use WASM trap instruction instead
+1. **`Failed to load Wasm module due to a missing import`**
+   - **Cause**: Dependency on Rust std library functions that use syscalls not available in GCP's sandbox
+   - **Fix**: Use minimal dependencies and proxy-wasm SDK only
+   - **Verify**: Check for imported functions with `wasm-objdump -x smart_router.wasm | grep import`
 
 **GCP Service Extensions Sandbox Restrictions:**
-- ❌ No WASI syscalls (file I/O, networking, etc.)
-- ❌ No JavaScript imports (`gojs.*` functions)
-- ❌ No OS-dependent Go standard library functions
-- ✅ Only proxy-wasm SDK APIs and pure computation
+- ❌ No standard library functions requiring OS syscalls
+- ❌ No filesystem, network, or threading APIs
+- ❌ Complex data structures that may allocate unexpectedly
+- ✅ Only proxy-wasm SDK APIs and minimal computation
 
 **References:**
 - [GCP Service Extensions Plugin Limitations](https://cloud.google.com/service-extensions/docs/plugins-overview#limitations)
-- [Prepare Plugin Code (Go)](https://cloud.google.com/service-extensions/docs/prepare-plugin-code#go)
-- [TinyGo Compiler Options](https://tinygo.org/docs/reference/usage/important-options/)
+- [Prepare Plugin Code (Rust)](https://cloud.google.com/service-extensions/docs/prepare-plugin-code#rust)
+- [Rust WebAssembly book](https://rustwasm.github.io/docs/book/)
 
 ## Configuration
 
@@ -226,7 +214,6 @@ The plugin accepts JSON configuration through Envoy:
 
 | Header | Description | Example |
 |--------|-------------|---------|
-| `x-route-target` | Backend target for Envoy routing | `v2` |
 | `X-Routed-By` | Attribution header | `smart-router` |
 | `X-Route-Reason` | Why this route was chosen | `beta-tester-match` |
 
@@ -248,7 +235,7 @@ make test
 make test-cover
 
 # Run specific test
-go test -v ./router -run TestDetermineRoute
+cargo test -- --test determine_route
 ```
 
 ### Testing Deployed Cloud Run Service
@@ -262,38 +249,52 @@ make test-live
 
 ```
 ==========================================
-1. CLOUD RUN DIRECT (no WASM filter)
+LOAD BALANCER with WASM Smart Router
 ==========================================
-Service URL: https://demo2-smart-router-backend-xxxxx-uc.a.run.app
+Load Balancer IP: 34.49.246.250
 
-Health check:
+1. Health check:
 {
   "demo": "02-smart-router",
-  "status": "healthy"
+  "status": "healthy",
+  "uptime_seconds": 57,
+  "version": "1.0.0"
 }
 
-Version endpoint:
+2. Version endpoint (standard user -> v1):
 {
+  "build": "2024.01.15.001",
+  "environment": "production",
+  "features": {
+    "beta_analytics": false,
+    "new_dashboard": false
+  },
+  "routing_info": {
+    "route_reason": "default",
+    "routed_by": "smart-router"
+  },
   "version": "v1"
 }
 
-⏱️  Direct latency: 0.089s
-
-==========================================
-2. LOAD BALANCER (with WASM filter)
-==========================================
-Load Balancer IP: 34.102.xxx.xxx
-
-Version endpoint (beta user -> v2):
+3. Version endpoint (beta user -> v2):
 {
+  "build": "2024.01.20.042",
+  "environment": "beta",
+  "features": {
+    "beta_analytics": true,
+    "experimental_ai": true,
+    "new_dashboard": true
+  },
+  "routing_info": {
+    "route_reason": "beta-tester-match",
+    "routed_by": "smart-router"
+  },
   "version": "v2-beta"
 }
 
-Response headers (WASM indicator):
+4. Response headers (WASM routing):
 x-routed-by: smart-router
 x-route-reason: beta-tester-match
-
-⏱️  LB + WASM latency: 0.156s
 ```
 
 ### Manual Testing
@@ -308,9 +309,14 @@ curl -k https://YOUR-LB-IP/api/version
 
 # Beta user via Load Balancer
 curl -k \
-  -H "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)" \
+  -H "User-Agent: iPhone" \
   -H "X-Geo-Country: DE" \
   -H "Cookie: beta-tester=true" \
+  https://YOUR-LB-IP/api/version
+
+# Canary user via Load Balancer
+curl -k \
+  -H "X-Request-Hash: 5" \
   https://YOUR-LB-IP/api/version
 ```
 
@@ -322,32 +328,29 @@ See [DATA_STRUCTURES.md](../DATA_STRUCTURES.md#demo-2-routing-test-cases) for co
 
 ```
 02-smart-router/
-├── go.mod              # Go module file
+├── Cargo.toml          # Rust dependencies
 ├── Makefile            # Build automation
 ├── README.md           # This file
-├── main.go             # Main plugin implementation
-├── router/
-│   ├── types.go        # Type definitions
-│   ├── router.go       # Routing logic
-│   ├── router_test.go  # Router tests
-│   ├── cookie.go       # Cookie parsing
-│   └── cookie_test.go  # Cookie tests
-└── smart_router.wasm   # Built Wasm file
+├── src/
+│   └── lib.rs          # Main plugin implementation
+├── target/wasm32-unknown-unknown/release/
+│   └── smart_router.wasm   # Built Wasm file
+└── infrastructure/
+    ├── backend/        # Cloud Run backend
+    ├── docker/         # Docker configurations
+    ├── envoy/          # Envoy configurations
+    └── gcp/            # GCP deployment configs
 ```
 
 ## Architecture
 
 ### Plugin Lifecycle
 
-1. **VM Context** (`vmContext`)
-   - Creates plugin contexts for each Envoy worker
-
-2. **Plugin Context** (`pluginContext`)
+1. **Root Context** (`SmartRouterRoot`)
    - Loads configuration on startup
-   - Creates router with rules
    - Creates HTTP contexts for requests
 
-3. **HTTP Context** (`httpContext`)
+2. **HTTP Context** (`SmartRouterHttp`)
    - Processes each request
    - Evaluates routing rules
    - Sets routing headers
@@ -365,6 +368,26 @@ See [DATA_STRUCTURES.md](../DATA_STRUCTURES.md#demo-2-routing-test-cases) for co
 - Cookie parsing is lazy (only when needed)
 - Regex patterns are compiled on demand
 - Minimal memory allocation per request
+
+## Why Rust Over Go for Wasm at the Edge
+
+In the context of server-side WebAssembly (Wasm) at the edge, **Rust is generally faster than Go**. This stems from Rust's zero-cost abstractions, lack of garbage collection (GC), and more mature Wasm compilation via LLVM, which produce smaller, more efficient binaries. Go's Wasm support, while functional, includes a full runtime (GC and scheduler), leading to larger binaries (often 2-10x bigger) and higher overhead.
+
+### Performance Comparison
+
+- **Startup time**: Go is slower due to runtime initialization
+- **Execution speed**: Rust edges out by 20-50% on average for CPU-bound tasks, but can be 5-10x faster in GC-heavy scenarios
+- **Memory usage**: Rust uses 30-70% less memory, reducing edge resource costs
+- **Binary size**: Rust Wasm modules are ~100-500 KB; Go's are 1-10 MB
+
+### Why Rust is Faster in Wasm Edge Scenarios
+
+1. **No GC Overhead**: Go's GC introduces pauses and allocations, amplified in Wasm's sandboxed environment
+2. **Binary Size & Cold Starts**: Rust's smaller binaries lead to faster edge deploys and instantiation
+3. **Runtime Compatibility**: Edge platforms optimize better for Rust-native Wasm
+4. **Edge-Specific Gains**: In latency-sensitive edge computing, Rust reduces TTFB by 20-40%
+
+**For load balancer extensions, Rust is the recommended choice for performance-critical logic.**
 
 ## Deployment
 
@@ -385,11 +408,12 @@ make deploy
 ```
 
 The deployment script will:
-1. Build the Go Wasm plugin using TinyGo (via Cloud Build)
+1. Build the Rust Wasm plugin (via Cloud Build)
 2. Build the Python backend container
-3. Push to Container Registry
+3. Push to Artifact Registry
 4. Deploy to Cloud Run
-5. Upload Wasm file to GCS (if bucket specified)
+5. Deploy Load Balancer with WASM plugin
+6. Upload Wasm file to GCS
 
 ### Cleanup
 
@@ -400,25 +424,25 @@ make destroy
 
 This removes:
 - Cloud Run service
-- Container images from Container Registry
+- Container images from Artifact Registry
 - Wasm files from GCS
-- Service Extensions (if configured)
+- Load Balancer resources
+- Service Extensions
 
 ## Troubleshooting
 
-### TinyGo Build Fails
+### Rust Build Fails
 
 ```bash
-# Verify TinyGo is installed
-tinygo version
-# Should show 0.39.0 or higher
+# Verify Rust is installed
+rustc --version
+cargo --version
 
-# If not installed (macOS)
-brew tap tinygo-org/tools
-brew install tinygo
+# Verify wasm32-unknown-unknown target is installed
+rustup target list --installed | grep wasm32-unknown-unknown
 
-# If version is too old
-brew upgrade tinygo
+# If not installed
+rustup target add wasm32-unknown-unknown
 ```
 
 ### Wasm Won't Load
@@ -430,23 +454,17 @@ ls -la smart_router.wasm
 # Verify it's a valid Wasm file
 file smart_router.wasm
 
-# Check Envoy logs
-docker logs envoy-demo2 2>&1 | grep -i wasm
+# Check GCP logs for WASM errors:
+gcloud logging read 'resource.type="networkservices.googleapis.com/WasmPluginVersion"' \
+  --limit=20 --format='table(timestamp,severity,jsonPayload.message)'
 ```
 
 ### Routing Not Working
 
 1. Check all conditions are met (AND logic)
 2. Verify header names are correct (case-sensitive in Envoy)
-3. Check GCP logs for WASM errors:
-   ```bash
-   gcloud logging read 'resource.type="networkservices.googleapis.com/WasmPluginVersion"' \
-     --limit=20 --format='table(timestamp,severity,jsonPayload.message)'
-   ```
-4. Enable debug logging:
-   ```json
-   {"log_level": "debug"}
-   ```
+3. Check GCP logs for WASM errors
+4. Enable debug logging: `{"log_level": "debug"}`
 
 ### Cookie Not Detected
 
@@ -459,68 +477,27 @@ docker logs envoy-demo2 2>&1 | grep -i wasm
 
 ### WASM Plugin Crashes on Startup
 
-#### Error 1: "restricted_callback"
+#### Error: "Failed to load Wasm module due to a missing import"
 
-**Symptom**: Plugin fails to start in GCP Service Extensions with error:
-```
-Function: _start failed: Uncaught Error: restricted_callback
-```
+**Symptom**: Plugin fails to start in GCP Service Extensions with error about missing imports
 
-**Root Cause**: WASM was built with `-target=wasi` which includes WASI syscalls that are blocked in GCP's sandbox.
+**Root Cause**: WASM was built with dependencies that use syscalls not available in GCP's sandbox
 
-**Solution**: Rebuild with `-target=wasm`:
-```bash
-# Update cloudbuild.yaml and Makefile
-tinygo build -o smart_router.wasm -scheduler=none -target=wasm -panic=trap -no-debug ./main.go
-
-# Redeploy
-make deploy
-```
-
-#### Error 2: "missing import: gojs.runtime.ticks"
-
-**Symptom**: Plugin fails to load with error:
-```
-Failed to load Wasm module due to a missing import: gojs.runtime.ticks
-```
-
-**Root Cause**: Go's panic handler tries to use JavaScript runtime functions that don't exist in GCP's WASM sandbox. This happens when `-panic=trap` flag is missing.
-
-**Solution**: Add `-panic=trap` flag to TinyGo build:
-```bash
-# Correct build command
-tinygo build -o smart_router.wasm -scheduler=none -target=wasm -panic=trap -no-debug ./main.go
-
-# Rebuild and redeploy
-make build
-```
-
-**Understanding the Fix**:
-- **Without `-panic=trap`**: Go uses its runtime panic handler which requires `gojs.*` imports
-- **With `-panic=trap`**: Panics trigger WASM trap instruction (immediate halt) instead of Go runtime
+**Solution**: 
+- Use only proxy-wasm SDK APIs
+- Avoid standard library functions requiring OS syscalls
+- Keep dependencies minimal
 
 **Check Logs**:
 ```bash
-# View Service Extensions logs (all)
+# View Service Extensions logs
 gcloud logging read 'resource.type="networkservices.googleapis.com/WasmPluginVersion"' \
   --limit=20 --format='table(timestamp,severity,jsonPayload.message)'
 
 # Filter for errors only
 gcloud logging read 'resource.type="networkservices.googleapis.com/WasmPluginVersion" AND severity>=ERROR' \
   --limit=10
-
-# Check recent logs (last 5 minutes)
-gcloud logging read 'resource.type="networkservices.googleapis.com/WasmPluginVersion" AND timestamp>="'$(date -u -v-5M '+%Y-%m-%dT%H:%M:%SZ')'"' \
-  --limit=10
 ```
-
-**Debug Checklist**:
-1. ✅ Verify all required flags in build command: `-target=wasm -scheduler=none -panic=trap -no-debug`
-2. ✅ Check [`cloudbuild.yaml`](cloudbuild.yaml) line 36 for correct TinyGo command
-3. ✅ Check [`Makefile`](Makefile) line 17 for correct `TINYGO_FLAGS`
-4. ✅ Rebuild with `make build` to trigger Cloud Build
-5. ✅ Check Service Extensions logs for new errors
-6. ✅ Test Load Balancer: `curl -k https://<LB-IP>/health`
 
 ### Authentication Errors (403 Forbidden)
 
@@ -538,7 +515,7 @@ curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
 
 - **Organization Policy**: If your GCP org blocks `allUsers` access, use authenticated requests via `make test-live`
 - **Wasm at Edge**: The Wasm filter runs in the Load Balancer, not Cloud Run directly. See `infrastructure/gcp/` for Load Balancer configuration.
-- **TinyGo Required**: Standard Go cannot compile proxy-wasm plugins - TinyGo is required for the WASM ABI compatibility
+- **Rust Recommended**: Rust provides better performance for Wasm at the edge compared to Go/TinyGo
 
 ## Related Documentation
 
@@ -550,10 +527,10 @@ curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
 
 ### GCP Service Extensions Documentation
 - [Service Extensions Overview](https://cloud.google.com/service-extensions/docs/overview)
-- [Prepare Plugin Code (Go)](https://cloud.google.com/service-extensions/docs/prepare-plugin-code#go)
+- [Prepare Plugin Code (Rust)](https://cloud.google.com/service-extensions/docs/prepare-plugin-code#rust)
 - [Create a Plugin](https://cloud.google.com/service-extensions/docs/create-plugin)
 - [Plugin Limitations](https://cloud.google.com/service-extensions/docs/plugins-overview#limitations)
-- [proxy-wasm Go SDK](https://github.com/tetratelabs/proxy-wasm-go-sdk)
+- [proxy-wasm Rust SDK](https://github.com/proxy-wasm/proxy-wasm-rust-sdk)
 
 ## License
 

@@ -13,7 +13,7 @@ Two demonstration projects showcasing WebAssembly (Wasm) with **GCP Service Exte
 | Demo | Description | Language | Location |
 |------|-------------|----------|----------|
 | [**01-Edge Security**](01-edge-security/) | PII/PCI data scrubbing at the edge | Rust | Load Balancer (Service Extensions) |
-| [**02-Smart Router**](02-smart-router/) | A/B testing & canary routing | TinyGo | Load Balancer (Service Extensions) |
+| [**02-Smart Router**](02-smart-router/) | A/B testing & canary routing | Rust | Load Balancer (Service Extensions) |
 
 ---
 
@@ -64,7 +64,7 @@ Both demos use **GCP Service Extensions** to run Wasm plugins inside the Load Ba
 
 ```bash
 # Manually install on macOS:
-brew install rust rustup tinygo
+brew install rust rustup
 
 # Setup Rust for Wasm
 rustup-init
@@ -126,13 +126,9 @@ cloudrun-wasm/
 │   ├── Makefile                    # Build automation
 │   └── README.md                   # Demo documentation
 │
-├── 02-smart-router/                # Demo 2: A/B Testing (TinyGo)
-│   ├── main.go                     # Plugin entry point
-│   ├── router/                     # Routing logic
-│   │   ├── types.go                # Rule definitions
-│   │   ├── router.go               # Decision engine
-│   │   └── cookie.go               # Cookie parser
-│   ├── go.mod                      # Go module
+├── 02-smart-router/                # Demo 2: A/B Testing (Rust)
+│   ├── src/lib.rs                  # Main plugin logic
+│   ├── Cargo.toml                  # Rust dependencies
 │   ├── Makefile                    # Build automation
 │   └── README.md                   # Demo documentation
 │
@@ -181,6 +177,48 @@ cloudrun-wasm/
 | **⚡ Fast** | Microsecond latency, no network hop to external service |
 | **🌍 Portable** | Write once, run on Envoy (local) or GCP LB (production) |
 | **🔧 Flexible** | Modify requests/responses without backend code changes |
+
+---
+
+## 🦀 Why Rust Over Go for Wasm at the Edge?
+
+In the context of server-side WebAssembly (Wasm) at the edge (e.g., using runtimes like Wasmtime, Wasmer, or WasmEdge on platforms such as Fastly Compute@Edge, Cloudflare Workers, or custom load balancers), **Rust is generally faster than Go**. This stems from Rust's zero-cost abstractions, lack of garbage collection (GC), and more mature Wasm compilation via LLVM, which produce smaller, more efficient binaries. Go's Wasm support, while functional, includes a full runtime (GC and scheduler), leading to larger binaries (often 2-10x bigger) and higher overhead, especially for compute-intensive tasks.
+
+### Performance Comparison
+
+Performance differences vary by workload:
+
+- **Startup time**: Go is slower due to runtime initialization
+- **Execution speed**: Rust edges out by 20-50% on average for CPU-bound tasks, but can be 5-10x faster in GC-heavy or memory-intensive scenarios
+- **Memory usage**: Rust uses 30-70% less memory, reducing edge resource costs
+- **Real-world edge impact**: In benchmarks on edge runtimes, Rust achieves near-native speeds (1.5-3x faster than JS), while Go lags due to GC pauses
+
+### Key Benchmarks
+
+| Benchmark/Source | Task/Workload | Rust Wasm Time | Go Wasm Time | Rust Advantage | Runtime/Notes |
+|------------------|---------------|----------------|--------------|----------------|---------------|
+| Ecostack (2022, Edge browser sim) | Array sorting (1M elements) | ~6,200 ms | ~9,500 ms | ~53% faster (1.53x speedup) | Browser-like edge; Rust leads in all browsers tested |
+| Karn Wong (2024, server-side Wasm) | Mixed compute (loops, math) | ~1.05x native | ~14.17x native (1317% slower) | 13x faster relative to native | Wasmtime/Wasmer; Go's GC causes massive overhead |
+| ReliaSoftware (2025, general Wasm) | Algorithms (n-body, spectral-norm) | Baseline | N/A | 30%+ faster | Benchmarks Game; Rust consistently 1.3x+ ahead |
+| Markaicode (2025, microservices/edge) | HTTP handling + DB ops | ~15-20% higher throughput | Baseline | 15-20% faster | Edge sim (Wasmtime); Rust slight edge in I/O |
+
+### Why Rust is Faster in Wasm Edge Scenarios
+
+1. **No GC Overhead**: Go's GC (even in TinyGo) introduces pauses and allocations, amplified in Wasm's sandboxed environment. Rust's ownership model avoids this, enabling tighter loops and lower latency (<1ms vs. Go's 5-50ms pauses).
+
+2. **Binary Size & Cold Starts**: Rust Wasm modules are ~100-500 KB; Go's are 1-10 MB, leading to slower edge deploys and instantiation (e.g., 100-500ms for Go vs. <50ms for Rust in Wasmtime).
+
+3. **Runtime Compatibility**: Edge platforms like Fastly use Wasmtime (Rust-native), optimizing Rust better. Go performs worse in Cranelift/LLVM backends due to runtime bloat.
+
+4. **Edge-Specific Gains**: In latency-sensitive edge computing (e.g., auth or personalization), Rust reduces TTFB by 20-40%.
+
+### When Go Might Close the Gap
+
+- **I/O-Bound Tasks**: Go's goroutines shine for concurrent networking; Rust needs async crates (e.g., Tokio), but still wins on raw speed.
+- **Development Speed**: Go compiles faster to Wasm (~2x quicker builds), but runtime perf suffers.
+- **Use TinyGo**: Reduces Go's binary size by 80% and overhead by ~50%, narrowing the gap to 2-3x vs. Rust.
+
+**For your use case (e.g., LB extensions), start with Rust for perf-critical logic.**
 
 ---
 

@@ -1,26 +1,57 @@
 # Makefile for Demo 2: Smart Router (A/B Testing)
-# TinyGo + proxy-wasm-go-sdk
+# Rust + proxy-wasm
 # Self-contained with local infrastructure and scripts
 
 .PHONY: all full build build-wasm test clean deploy deploy-skip-build destroy
-.PHONY: fmt lint check tidy docker-up docker-down docker-logs setup test-live help
+.PHONY: fmt lint check doc docker-up docker-down docker-logs setup test-live help
 
 # Output file
 WASM_FILE := smart_router.wasm
+WASM_BUILD_DIR := target/wasm32-unknown-unknown/release/
 
-# TinyGo build flags for proxy-wasm
-# - target=wasm: WASM target with JavaScript runtime support
-# - scheduler=none: Disable goroutine scheduler (proxy-wasm requirement)
-# - panic=trap: Trap on panic instead of Go runtime
-# - no-debug: Reduce binary size
-TINYGO_FLAGS := -scheduler=none -target=wasm -panic=trap -no-debug
+# Cargo build options
+CARGO_OPTS := --target wasm32-unknown-unknown --release --package smart-router
+
+# Ensure Homebrew-installed CLIs (e.g., gcloud) are reachable even in non-login shells
+GCLOUD := $(shell \
+	if command -v gcloud >/dev/null 2>&1; then \
+		command -v gcloud; \
+	elif [ -x /opt/homebrew/bin/gcloud ]; then \
+		echo /opt/homebrew/bin/gcloud; \
+	elif [ -x /usr/local/bin/gcloud ]; then \
+		echo /usr/local/bin/gcloud; \
+	fi \
+)
+
+ifeq ($(strip $(GCLOUD)),)
+$(error gcloud CLI not found. Install the Google Cloud SDK or update PATH before running make.)
+endif
+
+# Ensure Cargo is reachable
+CARGO := $(shell \
+	if command -v cargo >/dev/null 2>&1; then \
+		command -v cargo; \
+	elif [ -x ~/.cargo/bin/cargo ]; then \
+		echo ~/.cargo/bin/cargo; \
+	elif [ -x /opt/homebrew/bin/cargo ]; then \
+		echo /opt/homebrew/bin/cargo; \
+	fi \
+)
+
+ifeq ($(strip $(CARGO)),)
+$(error cargo CLI not found. Install Rust or update PATH before running make.)
+endif
+
+GCLOUD_DIR := $(patsubst %/,%,$(dir $(GCLOUD)))
+EXTRA_PATHS := /opt/homebrew/bin:/usr/local/bin:/usr/local/sbin
+export PATH := $(GCLOUD_DIR):$(EXTRA_PATHS):$(PATH)
 
 # GCP Configuration
-PROJECT_ID := $(shell gcloud config get-value project 2>/dev/null)
+PROJECT_ID := $(shell $(GCLOUD) config get-value project 2>/dev/null)
 REGION := us-central1
 ARTIFACT_REPO := demo2-smart-router
 
-# Use rustup's cargo if available (needed for wasm32 target)
+# Use rustup's cargo for WASM builds
 REPO_ROOT := $(shell cd ../.. && pwd)
 
 # Default target
@@ -38,16 +69,39 @@ quick: build test
 ## build: Build Wasm + backend + OCI image via Cloud Build
 build:
 	@echo "Building via Cloud Build (Wasm + backend + OCI image)..."
-	gcloud builds submit $(REPO_ROOT) \
+	$(GCLOUD) builds submit $(REPO_ROOT) \
 		--config=cloudbuild.yaml \
 		--project=$(PROJECT_ID) \
 		--substitutions=_REGION=$(REGION),_ARTIFACT_REPO=$(ARTIFACT_REPO)
 	@echo "Build complete. Images pushed to $(REGION)-docker.pkg.dev/$(PROJECT_ID)/$(ARTIFACT_REPO)/"
 
-## build-wasm: Build the Wasm binary locally with TinyGo (for development)
+## build-wasm: Build the Wasm binary locally with Cargo (for development)
 build-wasm:
+	@if ! which brew >/dev/null 2>&1; then \
+		echo "Homebrew not found. Please install Homebrew first."; \
+		exit 1; \
+	fi
+	@if ! brew list rust 2>/dev/null | grep -q rust; then \
+		if ! brew list rustup 2>/dev/null | grep -q rust; then \
+			echo "Rust not found. Install via Homebrew: brew install rust"; \
+			exit 1; \
+		fi; \
+	fi
+	@if ! which cargo >/dev/null 2>&1; then \
+		echo "Cargo not found. Ensure Rust installation is complete."; \
+		exit 1; \
+	fi
+	@if ! rustc --version | grep -q "rustc"; then \
+		echo "Rust toolchain not found."; \
+		exit 1; \
+	fi
+	@if ! rustup target list --installed | grep -q wasm32-unknown-unknown; then \
+		echo "WASM target not installed. Run: rustup target add wasm32-unknown-unknown"; \
+		exit 1; \
+	fi
 	@echo "Building Smart Router Wasm plugin locally..."
-	tinygo build -o $(WASM_FILE) $(TINYGO_FLAGS) ./main.go
+	RUSTFLAGS="-C link-arg=-zstack-size=32768 -C panic=abort -C debuginfo=0" $(CARGO) build $(CARGO_OPTS)
+	@cp $(WASM_BUILD_DIR)/smart_router.wasm $(WASM_FILE)
 	@echo "Built: $(WASM_FILE)"
 	@ls -lh $(WASM_FILE)
 
@@ -58,12 +112,12 @@ build-wasm:
 ## test: Run unit tests
 test:
 	@echo "Running tests..."
-	go test -v ./...
+	$(CARGO) test
 
 ## test-cover: Run tests with coverage
 test-cover:
 	@echo "Running tests with coverage..."
-	go test -v -cover ./...
+	$(CARGO) tarpaulin --fail-under 80
 
 ## test-integration: Run integration tests with Docker
 test-integration:
@@ -77,65 +131,35 @@ test-all:
 # Code Quality Targets
 # =============================================================================
 
-## lint: Run golangci-lint
+## lint: Run clippy linter
 lint:
 	@echo "Running linter..."
-	golangci-lint run ./...
+	$(CARGO) clippy --target wasm32-unknown-unknown
 
 ## fmt: Format code
 fmt:
 	@echo "Formatting code..."
-	gofmt -w .
+	$(CARGO) fmt
 
 ## fmt-check: Check code formatting
 fmt-check:
 	@echo "Checking code formatting..."
-	@test -z "$$(gofmt -l .)" || (echo "Files need formatting:" && gofmt -l . && exit 1)
+	$(CARGO) fmt --check
 
-## vet: Run go vet
+## vet: Run cargo check
 vet:
-	@echo "Running go vet..."
-	go vet ./...
+	@echo "Running cargo check..."
+	$(CARGO) check
 
-## check: Run all checks (fmt, vet, lint, test)
+## check: Run all checks (fmt, clippy, test)
 check: fmt-check vet lint test
 
-## tidy: Tidy go modules
+## tidy: Update dependencies
 tidy:
-	@echo "Tidying go modules..."
-	go mod tidy
+	@echo "Updating dependencies..."
+	$(CARGO) update
 
-# =============================================================================
-# Docker Targets
-# =============================================================================
 
-## docker-up: Start local development environment
-docker-up: build
-	@echo "Starting local development environment..."
-	docker compose -f infrastructure/docker/docker-compose.yaml up -d
-	@echo ""
-	@echo "Services started:"
-	@echo "  - Envoy (with Wasm): http://localhost:10000"
-	@echo "  - Backend: http://localhost:8080"
-	@echo "  - Envoy Admin: http://localhost:9901"
-	@echo ""
-	@echo "Test with:"
-	@echo "  curl http://localhost:10000/api/version"
-	@echo "  curl -H 'Cookie: beta-tester=true' -H 'User-Agent: iPhone' -H 'X-Geo-Country: DE' http://localhost:10000/api/version"
-
-## docker-down: Stop local development environment
-docker-down:
-	@echo "Stopping local development environment..."
-	docker compose -f infrastructure/docker/docker-compose.yaml down
-
-## docker-logs: View logs from all containers
-docker-logs:
-	docker compose -f infrastructure/docker/docker-compose.yaml logs -f
-
-## docker-clean: Stop and remove all containers, volumes, and images
-docker-clean:
-	@echo "Cleaning Docker resources..."
-	docker compose -f infrastructure/docker/docker-compose.yaml down -v --rmi local 2>/dev/null || true
 
 # =============================================================================
 # Deploy Targets
@@ -160,7 +184,7 @@ test-live:
 	@echo "=========================================="
 	@echo "LOAD BALANCER with WASM Smart Router"
 	@echo "=========================================="
-	@LB_IP=$$(gcloud compute addresses describe demo2-smart-router-lb-ip \
+	@LB_IP=$$($(GCLOUD) compute addresses describe demo2-smart-router-lb-ip \
 		--global --format='value(address)' 2>/dev/null || echo ""); \
 	if [ -n "$$LB_IP" ]; then \
 		echo "Load Balancer IP: $$LB_IP"; \
@@ -212,22 +236,24 @@ setup-verify:
 # =============================================================================
 
 ## clean: Clean build artifacts
-clean:
-	@echo "Cleaning..."
-	rm -f $(WASM_FILE)
-	go clean -cache
-	docker compose -f infrastructure/docker/docker-compose.yaml down -v --rmi local 2>/dev/null || true
+clean: clean-wasm
 	@echo "Clean complete"
 
+## clean-wasm: Clean WASM file and build artifacts
+clean-wasm:
+	@echo "Cleaning WASM file and build artifacts..."
+	rm -f $(WASM_FILE)
+	$(CARGO) clean
+
 ## size: Show Wasm file size
-size: build
+size: build-wasm
 	@echo "Wasm file size:"
 	@ls -lh $(WASM_FILE)
 
 ## deps: Download dependencies
 deps:
 	@echo "Downloading dependencies..."
-	go mod download
+	$(CARGO) fetch
 
 # =============================================================================
 # Help
