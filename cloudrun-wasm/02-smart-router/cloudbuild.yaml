@@ -21,7 +21,7 @@ steps:
       - '-v'
       - '/workspace:/workspace'
       - '-w'
-      - '/workspace/demos/02-smart-router'
+      - '/workspace/cloudrun-wasm/02-smart-router'
       - '-e'
       - 'HOME=/tmp'
       - '-e'
@@ -43,7 +43,7 @@ steps:
     args:
       - '-c'
       - |
-        cd demos/02-smart-router
+        cd cloudrun-wasm/02-smart-router
         go mod download
         go test -v ./router/...
     waitFor: ['-']  # Run in parallel with build
@@ -57,7 +57,7 @@ steps:
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPO}/demo2-backend:${_TAG}'
       - '-t'
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPO}/demo2-backend:latest'
-      - 'demos/02-smart-router/infrastructure/backend'
+      - 'cloudrun-wasm/02-smart-router/infrastructure/backend'
     waitFor: ['-']  # Start immediately, don't wait for wasm
 
   # Step 4: Push backend image to Artifact Registry
@@ -80,9 +80,9 @@ steps:
         # Create bucket if it doesn't exist
         gsutil ls gs://$$BUCKET 2>/dev/null || gsutil mb -l ${_REGION} gs://$$BUCKET
         # Upload wasm file
-        gsutil cp demos/02-smart-router/smart_router.wasm \
+        gsutil cp cloudrun-wasm/02-smart-router/smart_router.wasm \
           gs://$$BUCKET/demo2/smart_router.wasm
-        gsutil cp demos/02-smart-router/smart_router.wasm \
+        gsutil cp cloudrun-wasm/02-smart-router/smart_router.wasm \
           gs://$$BUCKET/demo2/smart_router-${_TAG}.wasm
         echo "Uploaded to: gs://$$BUCKET/demo2/smart_router.wasm"
     waitFor: ['build-wasm']
@@ -102,7 +102,7 @@ steps:
         DOCKERFILE
         
         # Copy the wasm file to tmp
-        cp demos/02-smart-router/smart_router.wasm /tmp/
+        cp cloudrun-wasm/02-smart-router/smart_router.wasm /tmp/
         
         # Build the OCI image
         cd /tmp
@@ -126,7 +126,7 @@ artifacts:
   objects:
     location: 'gs://${PROJECT_ID}-wasm-plugins/demo2/builds/$BUILD_ID/'
     paths:
-      - 'demos/02-smart-router/smart_router.wasm'
+      - 'cloudrun-wasm/02-smart-router/smart_router.wasm'
 
 # Images to push (already handled in steps, but good for logging)
 images:

@@ -19,7 +19,7 @@ This document contains all static data references, type definitions, schemas, an
 ### PII Pattern Configuration
 
 ```rust
-// demos/01-edge-security/src/patterns.rs
+// 01-edge-security/src/patterns.rs
 
 /// A pattern definition for PII detection and redaction
 pub struct PiiPattern {
@@ -115,7 +115,7 @@ pub struct RedactionResult {
 ### Routing Rule Definition
 
 ```go
-// demos/02-smart-router/router/types.go
+// 02-smart-router/router/types.go
 
 package router
 

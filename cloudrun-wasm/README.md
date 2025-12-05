@@ -12,8 +12,8 @@ Two demonstration projects showcasing WebAssembly (Wasm) with **GCP Service Exte
 
 | Demo | Description | Language | Location |
 |------|-------------|----------|----------|
-| [**01-Edge Security**](demos/01-edge-security/) | PII/PCI data scrubbing at the edge | Rust | Load Balancer (Service Extensions) |
-| [**02-Smart Router**](demos/02-smart-router/) | A/B testing & canary routing | TinyGo | Load Balancer (Service Extensions) |
+| [**01-Edge Security**](01-edge-security/) | PII/PCI data scrubbing at the edge | Rust | Load Balancer (Service Extensions) |
+| [**02-Smart Router**](02-smart-router/) | A/B testing & canary routing | TinyGo | Load Balancer (Service Extensions) |
 
 ---
 
@@ -63,11 +63,8 @@ Both demos use **GCP Service Extensions** to run Wasm plugins inside the Load Ba
 ### Prerequisites
 
 ```bash
-# Verify required tools
-./scripts/setup-dev.sh --verify
-
-# Or install manually on macOS:
-brew install rustup docker tinygo
+# Manually install on macOS:
+brew install rust rustup tinygo
 
 # Setup Rust for Wasm
 rustup-init
@@ -81,28 +78,27 @@ rustup target add wasm32-unknown-unknown
 git clone https://github.com/yourorg/cloudrun-wasm.git
 cd cloudrun-wasm
 
-# Setup development environment
-./scripts/setup-dev.sh
-
 # Build all demos
 make build
 
-# Start local environment (Envoy + Mock Backend)
-make docker-up
+# Deploy to Cloud Run
+make deploy
 
-# Test Demo 1: PII Scrubbing
-curl http://localhost:10000/api/user
+# Alternatively
+cd 01-edge-security && make all
+cd 02-smart-router && make all
+
+# Test Demo 1: PII Scrubbing (via Load Balancer)
+curl -k https://YOUR-LB-IP/api/user
 # Output: SSN and credit cards are redacted!
 
-# Test Demo 2: Smart Routing
-curl -H "Cookie: beta-tester=true" \
+# Test Demo 2: Smart Routing (via Load Balancer)
+curl -k \
+     -H "Cookie: beta-tester=true" \
      -H "User-Agent: iPhone" \
      -H "X-Geo-Country: DE" \
-     http://localhost:10001/api/version
+     https://YOUR-LB-IP/api/version
 # Output: Routed to v2-beta!
-
-# Stop environment
-make docker-down
 ```
 
 ---
@@ -123,23 +119,22 @@ make docker-down
 
 ```
 cloudrun-wasm/
-├── demos/
-│   ├── 01-edge-security/           # Demo 1: PII Scrubbing (Rust)
-│   │   ├── src/lib.rs              # Main plugin logic
-│   │   ├── src/patterns.rs         # PII regex patterns
-│   │   ├── Cargo.toml              # Rust dependencies
-│   │   ├── Makefile                # Build automation
-│   │   └── README.md               # Demo documentation
-│   │
-│   └── 02-smart-router/            # Demo 2: A/B Testing (TinyGo)
-│       ├── main.go                 # Plugin entry point
-│       ├── router/                 # Routing logic
-│       │   ├── types.go            # Rule definitions
-│       │   ├── router.go           # Decision engine
-│       │   └── cookie.go           # Cookie parser
-│       ├── go.mod                  # Go module
-│       ├── Makefile                # Build automation
-│       └── README.md               # Demo documentation
+├── 01-edge-security/               # Demo 1: PII Scrubbing (Rust)
+│   ├── src/lib.rs                  # Main plugin logic
+│   ├── src/patterns.rs             # PII regex patterns
+│   ├── Cargo.toml                  # Rust dependencies
+│   ├── Makefile                    # Build automation
+│   └── README.md                   # Demo documentation
+│
+├── 02-smart-router/                # Demo 2: A/B Testing (TinyGo)
+│   ├── main.go                     # Plugin entry point
+│   ├── router/                     # Routing logic
+│   │   ├── types.go                # Rule definitions
+│   │   ├── router.go               # Decision engine
+│   │   └── cookie.go               # Cookie parser
+│   ├── go.mod                      # Go module
+│   ├── Makefile                    # Build automation
+│   └── README.md                   # Demo documentation
 │
 ├── infrastructure/
 │   ├── envoy/                      # Envoy configurations
@@ -219,8 +214,8 @@ cloudrun-wasm/
 make test
 
 # Individual demos
-cd demos/01-edge-security && cargo test
-cd demos/02-smart-router && go test ./...
+cd 01-edge-security && make all
+cd 02-smart-router && make all
 
 # Integration tests with Envoy
 make integration-test
@@ -240,9 +235,6 @@ make build            # Build all Wasm modules
 make test             # Run all tests
 make clean            # Clean build artifacts
 make lint             # Run linters
-make docker-up        # Start local environment
-make docker-down      # Stop local environment
-make docker-logs      # View container logs
 make deploy           # Deploy to GCP (requires auth)
 ```
 
@@ -250,16 +242,16 @@ make deploy           # Deploy to GCP (requires auth)
 
 ```bash
 # Demo 1: Edge Security
-cd demos/01-edge-security
+cd 01-edge-security
 make build            # Build Wasm
 make test             # Run tests
-make deploy-local     # Copy to Envoy
+make deploy           # Deploy to Cloud Run
 
 # Demo 2: Smart Router
-cd demos/02-smart-router
+cd 02-smart-router
 make build            # Build Wasm
 make test             # Run tests
-make deploy-local     # Copy to Envoy
+make deploy           # Deploy to Cloud Run
 ```
 
 ---

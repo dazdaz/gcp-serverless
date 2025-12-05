@@ -19,7 +19,7 @@ steps:
       - '-c'
       - |
         rustup target add wasm32-unknown-unknown
-        cd demos/01-edge-security
+        cd cloudrun-wasm/01-edge-security
         cargo build --target wasm32-unknown-unknown --release
         ls -lh target/wasm32-unknown-unknown/release/edge_security.wasm
 
@@ -30,7 +30,7 @@ steps:
     args:
       - '-c'
       - |
-        cd demos/01-edge-security
+        cd cloudrun-wasm/01-edge-security
         cargo test
     waitFor: ['build-wasm']
 
@@ -43,7 +43,7 @@ steps:
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPO}/demo1-backend:${_TAG}'
       - '-t'
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPO}/demo1-backend:latest'
-      - 'demos/01-edge-security/infrastructure/backend'
+      - 'cloudrun-wasm/01-edge-security/infrastructure/backend'
     waitFor: ['-']  # Start immediately, don't wait for wasm
 
   # Step 4: Push backend image to Artifact Registry
@@ -66,9 +66,9 @@ steps:
         # Create bucket if it doesn't exist
         gsutil ls gs://$$BUCKET 2>/dev/null || gsutil mb -l ${_REGION} gs://$$BUCKET
         # Upload wasm file
-        gsutil cp demos/01-edge-security/target/wasm32-unknown-unknown/release/edge_security.wasm \
+        gsutil cp cloudrun-wasm/01-edge-security/target/wasm32-unknown-unknown/release/edge_security.wasm \
           gs://$$BUCKET/demo1/edge_security.wasm
-        gsutil cp demos/01-edge-security/target/wasm32-unknown-unknown/release/edge_security.wasm \
+        gsutil cp cloudrun-wasm/01-edge-security/target/wasm32-unknown-unknown/release/edge_security.wasm \
           gs://$$BUCKET/demo1/edge_security-${_TAG}.wasm
         echo "Uploaded to: gs://$$BUCKET/demo1/edge_security.wasm"
     waitFor: ['build-wasm', 'test-wasm']
@@ -88,7 +88,7 @@ steps:
         DOCKERFILE
         
         # Copy the wasm file to tmp
-        cp demos/01-edge-security/target/wasm32-unknown-unknown/release/edge_security.wasm /tmp/
+        cp cloudrun-wasm/01-edge-security/target/wasm32-unknown-unknown/release/edge_security.wasm /tmp/
         
         # Build the OCI image
         cd /tmp
@@ -112,7 +112,7 @@ artifacts:
   objects:
     location: 'gs://${PROJECT_ID}-wasm-plugins/demo1/builds/$BUILD_ID/'
     paths:
-      - 'demos/01-edge-security/target/wasm32-unknown-unknown/release/edge_security.wasm'
+      - 'cloudrun-wasm/01-edge-security/target/wasm32-unknown-unknown/release/edge_security.wasm'
 
 # Images to push (already handled in steps, but good for logging)
 images:

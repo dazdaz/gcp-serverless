@@ -23,8 +23,6 @@ This document provides step-by-step guides for setting up your development envir
 
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
-| Docker | 24+ | Container runtime | [docs.docker.com](https://docs.docker.com/get-docker/) |
-| Docker Compose | 2.20+ | Multi-container orchestration | Included with Docker Desktop |
 | Rust | 1.75+ | Demo 1 development | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
 | wasm32 target | - | Rust Wasm compilation | `rustup target add wasm32-unknown-unknown` |
 | TinyGo | 0.30+ | Demo 2 development | [tinygo.org/getting-started](https://tinygo.org/getting-started/) |
@@ -39,8 +37,6 @@ This document provides step-by-step guides for setting up your development envir
 ./scripts/setup-dev.sh --verify
 
 # Or manually check:
-docker --version          # Docker version 24.x.x
-docker compose version    # Docker Compose version 2.x.x
 rustc --version          # rustc 1.75.0 or higher
 rustup target list --installed | grep wasm32  # wasm32-unknown-unknown
 tinygo version           # tinygo version 0.30.0
@@ -71,14 +67,7 @@ cd cloudrun-wasm
 make all
 ```
 
-### Step 4: Start Local Environment
-
-```bash
-# Starts Envoy + Mock Backend
-docker compose up -d
-```
-
-### Step 5: Verify Setup
+### Step 4: Verify Setup
 
 ```bash
 # Test Demo 1 (should return redacted data)
@@ -95,7 +84,7 @@ curl -H "Cookie: beta-tester=true" http://localhost:10001/api/version
 ### Demo 1: Edge Security (Rust/proxy-wasm)
 
 ```bash
-cd demos/01-edge-security
+cd 01-edge-security
 
 # Build the Wasm binary
 make build
@@ -104,9 +93,6 @@ make build
 
 # Run tests
 make test
-
-# Deploy to local Envoy
-make deploy-local
 ```
 
 **Build Details:**
@@ -121,7 +107,7 @@ ls -lh target/wasm32-unknown-unknown/release/*.wasm
 ### Demo 2: Smart Router (TinyGo/proxy-wasm)
 
 ```bash
-cd demos/02-smart-router
+cd 02-smart-router
 
 # Build with TinyGo
 make build
@@ -130,9 +116,6 @@ make build
 
 # Run tests
 make test
-
-# Deploy to local Envoy
-make deploy-local
 ```
 
 **Build Details:**
@@ -168,10 +151,7 @@ curl http://localhost:8080/v2/api/version
 ### Testing Demo 1: PII Scrubbing
 
 ```bash
-# Start the environment
-docker compose up -d
-
-# Test with a response containing PII
+# Test with a response containing PII (deployed on Cloud Run)
 curl http://localhost:10000/api/user
 
 # Expected: SSN and credit card numbers are redacted
@@ -189,10 +169,7 @@ curl http://localhost:10000/api/user-clean
 ### Testing Demo 2: Smart Routing
 
 ```bash
-# Start the environment
-docker compose up -d
-
-# Test: Standard user -> routes to v1
+# Test: Standard user -> routes to v1 (deployed on Cloud Run)
 curl http://localhost:10001/api/version
 # Expected: {"version": "v1"}
 
@@ -216,8 +193,8 @@ curl -H "User-Agent: iPhone/17.0" \
 make test
 
 # Individual demos
-cd demos/01-edge-security && cargo test
-cd demos/02-smart-router && go test ./...
+cd 01-edge-security && make all
+cd 02-smart-router && make all
 ```
 
 ---
@@ -228,7 +205,7 @@ cd demos/02-smart-router && go test ./...
 
 1. **Open the patterns file:**
    ```bash
-   code demos/01-edge-security/src/patterns.rs
+   code 01-edge-security/src/patterns.rs
    ```
 
 2. **Add the new pattern:**
@@ -260,7 +237,7 @@ cd demos/02-smart-router && go test ./...
 
 1. **Open the router:**
    ```bash
-   code demos/02-smart-router/router/router.go
+   code 02-smart-router/router/router.go
    ```
 
 2. **Add new rule:**
@@ -307,11 +284,15 @@ cd demos/02-smart-router && go test ./...
        })
    ```
 
-3. **Rebuild and test:**
+3. **Deploy and test:**
    ```bash
-   docker compose build backend
-   docker compose up -d
-   curl http://localhost:8080/api/new-endpoint
+   # Deploy to Cloud Run
+   cd infrastructure/backend
+   make deploy
+   
+   # Test the endpoint
+   curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
+     https://YOUR-SERVICE-URL.run.app/api/new-endpoint
    ```
 
 ---
@@ -426,11 +407,12 @@ rustup target add wasm32-unknown-unknown
 #### "Envoy fails to load Wasm plugin"
 
 ```bash
-# Check Envoy logs
-docker compose logs envoy
+# Check GCP Service Extensions logs
+gcloud logging read 'resource.type="networkservices.googleapis.com/WasmPluginVersion"' \
+  --limit=20 --format='table(timestamp,severity,jsonPayload.message)'
 
 # Common causes:
-# 1. Wasm file path incorrect in envoy.yaml
+# 1. Wasm file not properly uploaded to GCS
 # 2. Wasm file compiled for wrong target
 # 3. proxy-wasm ABI version mismatch
 
@@ -452,14 +434,15 @@ go get github.com/tetratelabs/proxy-wasm-go-sdk
 #### "Backend not responding"
 
 ```bash
-# Check backend logs
-docker compose logs backend
+# Check Cloud Run logs
+gcloud run services logs read BACKEND-SERVICE-NAME --limit=50
 
 # Verify backend is running
-docker compose ps
+gcloud run services describe BACKEND-SERVICE-NAME
 
-# Restart if needed
-docker compose restart backend
+# Check service health
+curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
+  https://YOUR-SERVICE-URL.run.app/health
 ```
 
 #### "Tests pass locally but fail in CI"

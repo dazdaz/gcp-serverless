@@ -32,8 +32,6 @@ make test-live  # Verify routing works
 | `make deploy` | Deploy to Cloud Run |
 | `make test-live` | Test deployed service with authentication |
 | `make destroy` | Clean up all GCP resources |
-| `make docker-up` | Start local Docker Compose environment |
-| `make docker-down` | Stop local Docker Compose environment |
 | `make lint` | Run golangci-lint |
 | `make fmt` | Format code |
 | `make clean` | Clean build artifacts |
@@ -316,51 +314,14 @@ curl -k \
   https://YOUR-LB-IP/api/version
 ```
 
-### Local Testing with Docker Compose
-
-```bash
-# Start the environment
-make docker-up
-
-# Test: Standard user -> routes to v1
-curl http://localhost:10000/api/version
-# Expected: {"version": "v1"}
-
-# Test: Beta user -> routes to v2
-curl -H "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)" \
-     -H "X-Geo-Country: DE" \
-     -H "Cookie: beta-tester=true" \
-     http://localhost:10000/api/version
-# Expected: {"version": "v2-beta"}
-
-# Test: Partial match -> still v1
-curl -H "User-Agent: Mozilla/5.0 (iPhone)" \
-     -H "X-Geo-Country: US" \
-     http://localhost:10000/api/version
-# Expected: {"version": "v1"}
-
-# Test: Canary with hash
-curl -H "X-Request-Hash: 5" \
-     http://localhost:10000/api/version
-# Expected: {"version": "v2-beta"}
-
-# Check routing headers
-curl -v http://localhost:10000/api/version 2>&1 | grep -i "x-"
-# X-Routed-By: smart-router
-# X-Route-Reason: default
-
-# Stop the environment
-make docker-down
-```
-
 ### Test Fixtures
 
-See [DATA_STRUCTURES.md](../../DATA_STRUCTURES.md#demo-2-routing-test-cases) for comprehensive test cases.
+See [DATA_STRUCTURES.md](../DATA_STRUCTURES.md#demo-2-routing-test-cases) for comprehensive test cases.
 
 ## Project Structure
 
 ```
-demos/02-smart-router/
+02-smart-router/
 ├── go.mod              # Go module file
 ├── Makefile            # Build automation
 ├── README.md           # This file
@@ -582,10 +543,10 @@ curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
 ## Related Documentation
 
 ### Project Documentation
-- [Project Overview](../../PROJECT_OVERVIEW.md)
-- [Code Principles](../../CODE_PRINCIPLES.md)
-- [Data Structures](../../DATA_STRUCTURES.md)
-- [Contributing](../../CONTRIBUTING.md)
+- [Project Overview](../PROJECT_OVERVIEW.md)
+- [Code Principles](../CODE_PRINCIPLES.md)
+- [Data Structures](../DATA_STRUCTURES.md)
+- [Contributing](../CONTRIBUTING.md)
 
 ### GCP Service Extensions Documentation
 - [Service Extensions Overview](https://cloud.google.com/service-extensions/docs/overview)

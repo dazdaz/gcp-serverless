@@ -240,12 +240,12 @@ curl -k https://YOUR-LB-IP/api/user
 
 ### Test Fixtures
 
-See [DATA_STRUCTURES.md](../../DATA_STRUCTURES.md#demo-1-pii-test-cases) for comprehensive test cases.
+See [DATA_STRUCTURES.md](../DATA_STRUCTURES.md#demo-1-pii-test-cases) for comprehensive test cases.
 
 ## Project Structure
 
 ```
-demos/01-edge-security/
+01-edge-security/
 ├── Cargo.toml              # Rust package configuration
 ├── Makefile                # Build automation
 ├── README.md               # This file
@@ -382,10 +382,10 @@ This removes:
 ## Related Documentation
 
 ### Project Documentation
-- [Project Overview](../../PROJECT_OVERVIEW.md)
-- [Code Principles](../../CODE_PRINCIPLES.md)
-- [Data Structures](../../DATA_STRUCTURES.md)
-- [Contributing](../../CONTRIBUTING.md)
+- [Project Overview](../PROJECT_OVERVIEW.md)
+- [Code Principles](../CODE_PRINCIPLES.md)
+- [Data Structures](../DATA_STRUCTURES.md)
+- [Contributing](../CONTRIBUTING.md)
 
 ### GCP Service Extensions Documentation
 - [Service Extensions Overview](https://cloud.google.com/service-extensions/docs/overview)

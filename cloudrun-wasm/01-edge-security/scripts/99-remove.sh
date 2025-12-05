@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 # Default values
 DEFAULT_REGION="us-central1"
 DEFAULT_SERVICE_NAME="demo1-edge-security-backend"
-DEFAULT_ARTIFACT_REPO="cloudrun-wasm"
+DEFAULT_ARTIFACT_REPO="demo1-edge-security"
 
 # Print functions
 print_header() {

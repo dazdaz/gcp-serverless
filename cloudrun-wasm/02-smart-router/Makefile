@@ -8,11 +8,10 @@
 # Output file
 WASM_FILE := smart_router.wasm
 
-# TinyGo build flags for GCP Service Extensions sandbox
-# CRITICAL flags to avoid GCP sandbox restrictions:
-# - target=wasm: Pure WebAssembly, NOT wasi (blocks WASI syscalls → "restricted_callback")
+# TinyGo build flags for proxy-wasm
+# - target=wasm: WASM target with JavaScript runtime support
 # - scheduler=none: Disable goroutine scheduler (proxy-wasm requirement)
-# - panic=trap: Trap on panic instead of Go runtime (avoids gojs.* imports → "missing import")
+# - panic=trap: Trap on panic instead of Go runtime
 # - no-debug: Reduce binary size
 TINYGO_FLAGS := -scheduler=none -target=wasm -panic=trap -no-debug
 

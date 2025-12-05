@@ -5,8 +5,8 @@
 # =============================================================================
 
 # Rust/Cargo
-demos/01-edge-security/target/
-demos/01-edge-security/Cargo.lock
+01-edge-security/target/
+01-edge-security/Cargo.lock
 
 # Go/TinyGo - no specific excludes needed
 

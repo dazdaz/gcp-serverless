@@ -15,16 +15,19 @@ CARGO := $(shell if [ -x "$$HOME/.cargo/bin/cargo" ]; then echo "$$HOME/.cargo/b
 WASM_FILE := target/$(TARGET)/release/edge_security.wasm
 
 # Default target
-all: build test
+all: build test deploy test-live
 
-## all: Build and test (default target)
+## all: Complete workflow - build, test, deploy, and verify (default target)
+
+## quick: Build and test only (no deployment)
+quick: build test
 
 # =============================================================================
 # Build Targets
 # =============================================================================
 
-## full: Build, test, deploy, and test-live (complete workflow)
-full: build test deploy test-live
+## full: Alias for 'all' (complete workflow)
+full: all
 
 ## build: Build the Wasm binary
 build:
@@ -113,11 +116,12 @@ test-live:
 	if [ -n "$$LB_IP" ]; then \
 		echo "Load Balancer IP: $$LB_IP"; \
 		echo ""; \
+		ID_TOKEN=$$(gcloud auth print-identity-token); \
 		echo "Health check (via LB):"; \
-		curl -s -k "https://$$LB_IP/health" 2>/dev/null | jq . || echo "  (LB health check failed - is WASM plugin deployed?)"; \
+		curl -s -k -H "Authorization: Bearer $$ID_TOKEN" "https://$$LB_IP/health" 2>/dev/null | jq . || echo "  (LB health check failed - is WASM plugin deployed?)"; \
 		echo ""; \
 		echo "User endpoint (PII SHOULD be scrubbed by WASM):"; \
-		LB_TIME=$$(curl -s -k -o /tmp/lb_response.txt -w "%{time_total}" -D /tmp/lb_headers.txt "https://$$LB_IP/api/user" 2>/dev/null); \
+		LB_TIME=$$(curl -s -k -H "Authorization: Bearer $$ID_TOKEN" -o /tmp/lb_response.txt -w "%{time_total}" -D /tmp/lb_headers.txt "https://$$LB_IP/api/user" 2>/dev/null); \
 		cat /tmp/lb_response.txt | jq . 2>/dev/null || cat /tmp/lb_response.txt; \
 		echo ""; \
 		echo "⏱️  LB + WASM latency: $${LB_TIME}s"; \

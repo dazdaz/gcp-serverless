@@ -70,14 +70,14 @@ Both demos use **GCP Service Extensions** (Wasm in Load Balancer) + **Cloud Run*
 
 | ID | Status | Task | Notes |
 |----|--------|------|-------|
-| b1 | [x] | Create Cargo.toml with proxy-wasm-rust-sdk dependency | `demos/01-edge-security/Cargo.toml` |
-| b2 | [x] | Implement `RootContext` for plugin initialization | `demos/01-edge-security/src/lib.rs` |
-| b3 | [x] | Implement `HttpContext` for request handling | `demos/01-edge-security/src/lib.rs` |
-| b4 | [x] | Create PII pattern regex engine | `demos/01-edge-security/src/patterns.rs` |
-| b5 | [x] | Implement body scanning and redaction | `demos/01-edge-security/src/lib.rs` |
-| b6 | [x] | Add `X-PII-Redacted` response header | `demos/01-edge-security/src/lib.rs` |
-| b7 | [x] | Write unit tests for each PII pattern | `demos/01-edge-security/src/patterns.rs` |
-| b8 | [x] | Create demo-specific README.md | `demos/01-edge-security/README.md` |
+| b1 | [x] | Create Cargo.toml with proxy-wasm-rust-sdk dependency | `01-edge-security/Cargo.toml` |
+| b2 | [x] | Implement `RootContext` for plugin initialization | `01-edge-security/src/lib.rs` |
+| b3 | [x] | Implement `HttpContext` for request handling | `01-edge-security/src/lib.rs` |
+| b4 | [x] | Create PII pattern regex engine | `01-edge-security/src/patterns.rs` |
+| b5 | [x] | Implement body scanning and redaction | `01-edge-security/src/lib.rs` |
+| b6 | [x] | Add `X-PII-Redacted` response header | `01-edge-security/src/lib.rs` |
+| b7 | [x] | Write unit tests for each PII pattern | `01-edge-security/src/patterns.rs` |
+| b8 | [x] | Create demo-specific README.md | `01-edge-security/README.md` |
 
 ---
 
@@ -90,16 +90,16 @@ Both demos use **GCP Service Extensions** (Wasm in Load Balancer) + **Cloud Run*
 
 | ID | Status | Task | Notes |
 |----|--------|------|-------|
-| b9 | [x] | Create go.mod with proxy-wasm-go-sdk dependency | `demos/02-smart-router/go.mod` |
-| b10 | [x] | Define RoutingRule and Condition structs | `demos/02-smart-router/router/types.go` |
-| b11 | [x] | Implement `pluginContext` for initialization | `demos/02-smart-router/main.go` |
-| b12 | [x] | Implement `httpContext` for request handling | `demos/02-smart-router/main.go` |
-| b13 | [x] | Create header inspection logic | `demos/02-smart-router/router/router.go` |
-| b14 | [x] | Implement cookie parsing utility | `demos/02-smart-router/router/cookie.go` |
-| b15 | [x] | Add routing decision logic | `demos/02-smart-router/router/router.go` |
-| b16 | [x] | Set `X-Routed-By` and `X-Route-Reason` headers | `demos/02-smart-router/main.go` |
-| b17 | [x] | Write unit tests for routing rules | `demos/02-smart-router/router/router_test.go` |
-| b18 | [x] | Create demo-specific README.md | `demos/02-smart-router/README.md` |
+| b9 | [x] | Create go.mod with proxy-wasm-go-sdk dependency | `02-smart-router/go.mod` |
+| b10 | [x] | Define RoutingRule and Condition structs | `02-smart-router/router/types.go` |
+| b11 | [x] | Implement `pluginContext` for initialization | `02-smart-router/main.go` |
+| b12 | [x] | Implement `httpContext` for request handling | `02-smart-router/main.go` |
+| b13 | [x] | Create header inspection logic | `02-smart-router/router/router.go` |
+| b14 | [x] | Implement cookie parsing utility | `02-smart-router/router/cookie.go` |
+| b15 | [x] | Add routing decision logic | `02-smart-router/router/router.go` |
+| b16 | [x] | Set `X-Routed-By` and `X-Route-Reason` headers | `02-smart-router/main.go` |
+| b17 | [x] | Write unit tests for routing rules | `02-smart-router/router/router_test.go` |
+| b18 | [x] | Create demo-specific README.md | `02-smart-router/README.md` |
 
 ---
 

@@ -157,22 +157,21 @@ cloudrun-wasm/
 ├── DATA_STRUCTURES.md                 # Schemas and examples
 ├── TODO.md                            # Implementation checklist
 │
-├── demos/
-│   ├── 01-edge-security/              # Demo 1: PII Scrubbing
-│   │   ├── README.md
-│   │   ├── Cargo.toml
-│   │   ├── src/
-│   │   │   └── lib.rs
-│   │   ├── tests/
-│   │   └── Makefile
-│   │
-│   └── 02-smart-router/               # Demo 2: A/B Testing
-│       ├── README.md
-│       ├── go.mod
-│       ├── main.go
-│       ├── router/
-│       │   └── router.go
-│       └── Makefile
+├── 01-edge-security/                  # Demo 1: PII Scrubbing
+│   ├── README.md
+│   ├── Cargo.toml
+│   ├── src/
+│   │   └── lib.rs
+│   ├── tests/
+│   └── Makefile
+│
+├── 02-smart-router/                   # Demo 2: A/B Testing
+│   ├── README.md
+│   ├── go.mod
+│   ├── main.go
+│   ├── router/
+│   │   └── router.go
+│   └── Makefile
 │
 ├── infrastructure/
 │   ├── envoy/
@@ -245,27 +244,15 @@ on_http_response_body(body_size, end_of_stream) -> Action
 
 ---
 
-## Local Development Environment
+## GCP Deployment
 
-For local testing without GCP, we use Docker Compose to run:
+The demos are deployed on Google Cloud Platform using:
 
-1. **Envoy Proxy** - Loads the Wasm plugins
-2. **Mock Backend** - Simple Flask server returning test data
+1. **Cloud Run** - Hosts the backend services
+2. **Application Load Balancer** - Routes traffic and runs Wasm plugins via Service Extensions
+3. **Cloud Storage** - Stores Wasm plugin binaries
 
-```mermaid
-graph LR
-    subgraph Docker Compose
-        Envoy[Envoy Proxy :10000]
-        Backend[Flask Backend :8080]
-    end
-    
-    Client[curl / Browser] --> Envoy
-    Envoy -->|Demo 2: Route| Envoy
-    Envoy --> Backend
-    Backend --> Envoy
-    Envoy -->|Demo 1: Scrub| Envoy
-    Envoy --> Client
-```
+For local development and testing of Wasm plugins, use the provided Cloud Build configurations to build and deploy to GCP.
 
 ---
 
