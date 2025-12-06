@@ -25,6 +25,10 @@ Using a YAML file is generally preferred for managing multiple environment varia
 
 2.  **Deploy using CLI flags:**
     ```bash
+    The old way : --set-env-vars key1=val1,key2=val2,key3=val3`
+    ```
+    
+    ```bash
     ./01-deploy-cli-flags.sh
     ```
     This script runs a long `gcloud run deploy` command with many `--set-env-vars` flags.
@@ -42,7 +46,12 @@ Using a YAML file is generally preferred for managing multiple environment varia
     }
     ```
 
-3.  **Deploy using YAML file:**
+4.  **Deploy using YAML file:**
+    ```
+    The new way - This works with services, jobs, and worker pools.
+    --env-vars-file=prod.env
+    ```
+    
     ```bash
     ./02-deploy-yaml-file.sh
     ```
@@ -61,7 +70,7 @@ Using a YAML file is generally preferred for managing multiple environment varia
     }
     ```
 
-4.  **Compare:**
+6.  **Compare:**
     Notice how much cleaner the deployment command is in `02-deploy-yaml-file.sh` compared to `01-deploy-cli-flags.sh`.
 
 ## Cleanup
